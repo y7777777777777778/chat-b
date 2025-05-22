@@ -1,3 +1,5 @@
+
+
 const fs = require("fs");
 const path = require("path");
 const express = require("express");
@@ -65,8 +67,10 @@ app.post("/pin-message", (req, res) => {
 
 // **メッセージ取得API**
 app.get("/messages", (req, res) => {
+    const { room } = req.query;
     if (!fs.existsSync(MESSAGE_FILE)) return res.json([]);
-    res.json(JSON.parse(fs.readFileSync(MESSAGE_FILE, "utf-8")));
+    const messages = JSON.parse(fs.readFileSync(MESSAGE_FILE, "utf-8"));
+    res.json(messages.filter(m => m.room === room));
 });
 
 // **ピン止めメッセージ取得API**
