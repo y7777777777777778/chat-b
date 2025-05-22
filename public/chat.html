@@ -19,7 +19,7 @@
     <h2>部屋選択</h2>
     <select id="roomSelect">
         <option value="雑談部屋">雑談部屋</option>
-        <option value="開発部屋">開発部屋</option>
+        <option value="雑談部屋2">雑談部屋2</option>
     </select>
     <button id="joinRoom">部屋に入る</button>
 
@@ -32,6 +32,12 @@
 
     <input type="file" id="fileInput">
     <button id="send-file-button">ファイル送信</button>
+
+    <!-- モーダル表示用 -->
+    <div id="imageModal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.8); text-align:center;">
+        <img id="modalImage" style="max-width:90%; max-height:90%; margin-top:50px;">
+        <button onclick="closeModal()" style="position:absolute; top:10px; right:10px; background:red; color:white;">閉じる</button>
+    </div>
 
     <script>
         const socket = io();
@@ -63,12 +69,21 @@
 
         function getFilePreview(fileUrl) {
             if (fileUrl.match(/\.(png|jpg|jpeg|gif)$/)) {
-                return `<img src="${fileUrl}" width="100">`;
+                return `<button onclick="showImage('${fileUrl}')">🔍 画像を表示</button>`;
             } else if (fileUrl.match(/\.(mp4|webm)$/)) {
                 return `<video src="${fileUrl}" controls width="150"></video>`;
             } else {
                 return `<a href="${fileUrl}" target="_blank">📎 ファイルを開く</a>`;
             }
+        }
+
+        function showImage(fileUrl) {
+            document.getElementById("modalImage").src = fileUrl;
+            document.getElementById("imageModal").style.display = "block";
+        }
+
+        function closeModal() {
+            document.getElementById("imageModal").style.display = "none";
         }
 
         function sendMessage() {
