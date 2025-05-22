@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="ja">
 <head>
@@ -19,13 +20,16 @@
         <option value="雑談部屋">雑談部屋</option>
         <option value="雑談部屋2">雑談部屋2</option>
     </select>
+    <button id="joinRoom">部屋に入る</button>
 
     <h2>チャットルーム</h2>
     <div id="chat-box"></div>
-    
+    <p id="pinnedMessage" style="font-weight: bold; color: red;"></p>
+
     <input type="text" id="message-input" placeholder="メッセージを入力...">
     <button id="send-button">送信</button>
-    
+    <button id="pin-button">📌 ピン止め</button>
+
     <input type="file" id="fileInput">
     <button id="send-file-button">ファイル送信</button>
 
@@ -34,67 +38,44 @@
         const username = localStorage.getItem("username") || "ゲスト";
         let currentRoom = localStorage.getItem("currentRoom") || "雑談部屋";
 
-        document.addEventListener("DOMContentLoaded", () => {
-            document.getElementById("usernameDisplay").textContent = `ログインユーザー: ${username}`;
-            document.getElementById("roomSelect").value = currentRoom;
+        document.getElementById("joinRoom").addEventListener("click", () => {
+            currentRoom = document.getElementById("roomSelect").value;
             localStorage.setItem("currentRoom", currentRoom);
             socket.emit("joinRoom", currentRoom);
         });
 
-        async function fetchMessages() {
-            const response = await fetch("/messages");
-            const messages = await response.json();
-            const chatBox = document.getElementById("chat-box");
-            chatBox.innerHTML = ""; 
-
-            messages.forEach(msg => {
-                if (msg.file) {
-                    chatBox.innerHTML += `<p><strong>${msg.user}:</strong> <a href="${msg.file}" target="_blank">📎 ファイル</a></p>`;
-                } else {
-                    chatBox.innerHTML += `<p><strong>${msg.user}:</strong> ${msg.text}</p>`;
-                }
-            });
-        }
-
         function sendMessage() {
-            const messageInput = document.getElementById("message-input");
-            const message = messageInput.value.trim();
-            if (!message) return;
+            const message = document.getElementById("message-input").value;
+            if (!message.trim()) return;
 
             fetch("/send-message", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ message, username, room: currentRoom })
             }).then(() => {
-                messageInput.value = "";
-                fetchMessages();
+                document.getElementById("message-input").value = "";
             });
         }
 
-        function sendFile() {
-            const fileInput = document.getElementById("fileInput").files[0];
-            if (!fileInput) {
-                alert("ファイルを選択してください！");
-                return;
-            }
+        function pinMessage() {
+            const message = document.getElementById("message-input").value;
+            if (!message.trim()) return;
 
-            const formData = new FormData();
-            formData.append("file", fileInput);
-            formData.append("username", username);
-            formData.append("room", currentRoom);
-
-            fetch("/upload", {
-                method: "POST",
-                body: formData
-            }).then(() => {
-                fetchMessages(); 
-            });
+            socket.emit("pinMessage", { username, message, room: currentRoom });
         }
 
         document.getElementById("send-button").addEventListener("click", sendMessage);
-        document.getElementById("send-file-button").addEventListener("click", sendFile);
+        document.getElementById("pin-button").addEventListener("click", pinMessage);
 
-        window.onload = fetchMessages;
+        socket.on("updatePinnedMessage", (data) => {
+            document.getElementById("pinnedMessage").innerHTML = `📌 ${data.message}`;
+        });
+
+        socket.on("message", (data) => {
+            document.getElementById("chat-box").innerHTML += `<p><strong>${data.user}:</strong> ${data.text || data.file}</p>`;
+        });
+
+        window.onload = () => socket.emit("joinRoom", currentRoom);
     </script>
 </body>
 </html>
