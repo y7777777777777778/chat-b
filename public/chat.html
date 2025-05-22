@@ -1,102 +1,106 @@
 <!DOCTYPE html>
-
 <html lang="ja">
 <head>
     <meta charset="UTF-8">
     <title>チャットルーム</title>
     <script src="/socket.io/socket.io.js"></script>
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Chat App</title>
     <style>
         body { font-family: Arial, sans-serif; }
         #messages { border: 1px solid #ccc; padding: 10px; height: 300px; overflow-y: scroll; }
-        #pinnedMessage { font-weight: bold; color: red; }
-        .hidden { display: none; }
         #chat-box { border: 1px solid #ccc; padding: 10px; height: 300px; overflow-y: auto; }
-        #message-input { width: 80%; }
-        #send-button { width: 18%; }
+        #message-input, #fileInput { width: 80%; }
+        #send-button, #send-file-button { width: 18%; }
     </style>
 </head>
 <body>
     <h1>チャットルーム</h1>
     <p id="usernameDisplay"></p> 
-     <select id="roomSelect">
+    <select id="roomSelect">
         <option value="雑談部屋">雑談部屋</option>
         <option value="雑談部屋2">雑談部屋2</option>
-        </body>
-<script>
-    const socket = io();
-     const username = localStorage.getItem("username") || "ゲスト";
-    let currentRoom = localStorage.getItem("currentRoom") || "雑談部屋";
- document.addEventListener("DOMContentLoaded", () => {
-        document.getElementById("usernameDisplay").textContent = `ログインユーザー: ${username}`;
-        document.getElementById("roomSelect").value = currentRoom;
-      localStorage.setItem("currentRoom", currentRoom);
-        socket.emit("joinRoom", currentRoom);
-    }
-                           <h2>チャットルーム</h2>
+    </select>
+
+    <h2>チャットルーム</h2>
     <div id="chat-box"></div>
     
     <input type="text" id="message-input" placeholder="メッセージを入力...">
     <button id="send-button">送信</button>
+    
+    <input type="file" id="fileInput">
+    <button id="send-file-button">ファイル送信</button>
 
-    function sendMessage() {
-        const message = document.getElementById('messageInput').value;
-        if (!message.trim()) return;
-         socket.emit('message', { username, message, room: currentRoom });
-    }
     <script>
+        const socket = io();
+        const username = localStorage.getItem("username") || "ゲスト";
+        let currentRoom = localStorage.getItem("currentRoom") || "雑談部屋";
+
+        document.addEventListener("DOMContentLoaded", () => {
+            document.getElementById("usernameDisplay").textContent = `ログインユーザー: ${username}`;
+            document.getElementById("roomSelect").value = currentRoom;
+            localStorage.setItem("currentRoom", currentRoom);
+            socket.emit("joinRoom", currentRoom);
+        });
+
         async function fetchMessages() {
             const response = await fetch("/messages");
             const messages = await response.json();
-
-    function sendFile() {
-        const file = document.getElementById('fileInput').files[0];
-          };
-        reader.readAsDataURL(file);
-    }
             const chatBox = document.getElementById("chat-box");
-            chatBox.innerHTML = ""; // 表示をリセット
- function pinMessage(message) {
-        socket.emit('pinMessage', { username, message, room: currentRoom });
-    }
+            chatBox.innerHTML = ""; 
+
             messages.forEach(msg => {
-                chatBox.innerHTML += `<p><strong>${msg.user}:</strong> ${msg.text}</p>`;
+                if (msg.file) {
+                    chatBox.innerHTML += `<p><strong>${msg.user}:</strong> <a href="${msg.file}" target="_blank">📎 ファイル</a></p>`;
+                } else {
+                    chatBox.innerHTML += `<p><strong>${msg.user}:</strong> ${msg.text}</p>`;
+                }
             });
         }
 
-    socket.on('messageHistory', (history) => {
-        document.getElementById('messages').innerHTML = "";
-        history.forEach(addMessageToChat);
-    });
-        document.getElementById("send-button").addEventListener("click", async () => {
+        function sendMessage() {
             const messageInput = document.getElementById("message-input");
             const message = messageInput.value.trim();
             if (!message) return;
- socket.on('fileHistory', (history) => {
-        history.forEach(displayFile);
-    });
-            await fetch("/send-message", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ message })
-            });
-             socket.on('message', addMessageToChat);
-    socket.on('file', displayFile);
+
+            socket.emit("message", { username, message, room: currentRoom });
             messageInput.value = "";
-            fetchMessages(); // 更新
+        }
+
+        function sendFile() {
+            const fileInput = document.getElementById("fileInput").files[0];
+            if (!fileInput) {
+                alert("ファイルを選択してください！");
+                return;
+            }
+
+            const formData = new FormData();
+            formData.append("file", fileInput);
+            formData.append("username", username);
+            formData.append("room", currentRoom);
+
+            fetch("/upload", {
+                method: "POST",
+                body: formData
+            }).then(() => {
+                fetchMessages(); 
+            });
+        }
+
+        document.getElementById("send-button").addEventListener("click", sendMessage);
+        document.getElementById("send-file-button").addEventListener("click", sendFile);
+
+        socket.on("messageHistory", (history) => {
+            document.getElementById("chat-box").innerHTML = "";
+            history.forEach(addMessageToChat);
         });
 
-    socket.on('updatePinnedMessage', (data) => {
-        document.getElementById('pinnedMessage').innerHTML = `📌 ピン止め: ${data.message}`;
-    });
+        function addMessageToChat(data) {
+            const div = document.createElement("div");
+            div.textContent = `${data.username}: ${data.message}`;
+            document.getElementById("chat-box").appendChild(div);
+        }
+
         window.onload = fetchMessages;
     </script>
-
-    function addMessageToChat(data) {
-        const div = document.createElement('div');
-      document.getElementById('messages').appendChild(container);
-    }
-</script>
 </body>
 </html>
