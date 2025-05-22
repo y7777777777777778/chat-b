@@ -8,13 +8,16 @@
     <style>
         body { font-family: Arial, sans-serif; }
         #chat-box { border: 1px solid #ccc; padding: 10px; height: 300px; overflow-y: auto; }
+        #pinnedMessage { font-weight: bold; color: red; }
         #message-input, #fileInput { width: 80%; }
-        #send-button, #send-file-button { width: 18%; }
+        #send-button, #pin-button, #send-file-button, #joinRoom { width: 18%; }
     </style>
 </head>
 <body>
     <h1>チャットルーム</h1>
     <p id="usernameDisplay"></p> 
+
+    <h2>部屋選択</h2>
     <select id="roomSelect">
         <option value="雑談部屋">雑談部屋</option>
         <option value="雑談部屋2">雑談部屋2</option>
@@ -23,7 +26,7 @@
 
     <h2>チャットルーム</h2>
     <div id="chat-box"></div>
-    <p id="pinnedMessage" style="font-weight: bold; color: red;"></p>
+    <p id="pinnedMessage"></p>
 
     <input type="text" id="message-input" placeholder="メッセージを入力...">
     <button id="send-button">送信</button>
@@ -37,11 +40,33 @@
         const username = localStorage.getItem("username") || "ゲスト";
         let currentRoom = localStorage.getItem("currentRoom") || "雑談部屋";
 
+        document.getElementById("usernameDisplay").textContent = `ログインユーザー: ${username}`;
+
         document.getElementById("joinRoom").addEventListener("click", () => {
             currentRoom = document.getElementById("roomSelect").value;
             localStorage.setItem("currentRoom", currentRoom);
             socket.emit("joinRoom", currentRoom);
+            fetchMessages();
+            fetchPinnedMessage();
         });
+
+        async function fetchMessages() {
+            const response = await fetch("/messages");
+            const messages = await response.json();
+            const chatBox = document.getElementById("chat-box");
+            chatBox.innerHTML = ""; 
+
+            messages.forEach(msg => {
+                chatBox.innerHTML += `<p><strong>${msg.user}:</strong> ${msg.text || `<a href="${msg.file}" target="_blank">📎 ファイル</a>`}</p>`;
+            });
+        }
+
+        async function fetchPinnedMessage() {
+            const response = await fetch("/pinned-messages");
+            const pinnedMessages = await response.json();
+            const pinnedText = pinnedMessages[currentRoom] || "ピン止めなし";
+            document.getElementById("pinnedMessage").innerHTML = `📌 ${pinnedText}`;
+        }
 
         function sendMessage() {
             const message = document.getElementById("message-input").value;
@@ -53,6 +78,7 @@
                 body: JSON.stringify({ message, username, room: currentRoom })
             }).then(() => {
                 document.getElementById("message-input").value = "";
+                fetchMessages();
             });
         }
 
@@ -60,21 +86,52 @@
             const message = document.getElementById("message-input").value;
             if (!message.trim()) return;
 
-            socket.emit("pinMessage", { username, message, room: currentRoom });
+            fetch("/pin-message", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ message, room: currentRoom })
+            }).then(() => {
+                fetchPinnedMessage();
+            });
+        }
+
+        function sendFile() {
+            const fileInput = document.getElementById("fileInput").files[0];
+            if (!fileInput) {
+                alert("ファイルを選択してください！");
+                return;
+            }
+
+            const formData = new FormData();
+            formData.append("file", fileInput);
+            formData.append("username", username);
+            formData.append("room", currentRoom);
+
+            fetch("/upload", {
+                method: "POST",
+                body: formData
+            }).then(() => {
+                fetchMessages(); 
+            });
         }
 
         document.getElementById("send-button").addEventListener("click", sendMessage);
         document.getElementById("pin-button").addEventListener("click", pinMessage);
+        document.getElementById("send-file-button").addEventListener("click", sendFile);
 
         socket.on("updatePinnedMessage", (data) => {
             document.getElementById("pinnedMessage").innerHTML = `📌 ${data.message}`;
         });
 
         socket.on("message", (data) => {
-            document.getElementById("chat-box").innerHTML += `<p><strong>${data.user}:</strong> ${data.text || data.file}</p>`;
+            document.getElementById("chat-box").innerHTML += `<p><strong>${data.user}:</strong> ${data.text || `<a href="${data.file}" target="_blank">📎 ファイル</a>`}</p>`;
         });
 
-        window.onload = () => socket.emit("joinRoom", currentRoom);
+        window.onload = () => {
+            socket.emit("joinRoom", currentRoom);
+            fetchMessages();
+            fetchPinnedMessage();
+        };
     </script>
 </body>
 </html>
