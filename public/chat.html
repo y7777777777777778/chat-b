@@ -43,15 +43,14 @@
         document.getElementById("roomSelect").value = currentRoom;
         socket.emit("joinRoom", currentRoom);
     });
+    <h2>チャットルーム</h2>
+    <div id="chat-box"></div>
 
     function joinRoom() {
         currentRoom = document.getElementById("roomSelect").value;
         localStorage.setItem("currentRoom", currentRoom);
         socket.emit("joinRoom", currentRoom);
     }
-    <h2>チャットルーム</h2>
-    <div id="chat-box"></div>
-    
     <input type="text" id="message-input" placeholder="メッセージを入力...">
     <button id="send-button">送信</button>
 
@@ -79,7 +78,6 @@
 
     function pinMessage(message) {
         socket.emit('pinMessage', { username, message, room: currentRoom });
-    }
             messages.forEach(msg => {
                 chatBox.innerHTML += `<p><strong>${msg.user}:</strong> ${msg.text}</p>`;
             });
@@ -96,7 +94,6 @@
 
     socket.on('fileHistory', (history) => {
         history.forEach(displayFile);
-    });
             await fetch("/send-message", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
@@ -105,15 +102,12 @@
 
     socket.on('message', addMessageToChat);
     socket.on('file', displayFile);
-            messageInput.value = "";
-            fetchMessages(); // 更新
-        });
 
     socket.on('updatePinnedMessage', (data) => {
         document.getElementById('pinnedMessage').innerHTML = `📌 ピン止め: ${data.message}`;
-    });
-        window.onload = fetchMessages;
-    </script>
+            messageInput.value = "";
+            fetchMessages(); // 更新
+        });
 
     function addMessageToChat(data) {
         const div = document.createElement('div');
@@ -136,6 +130,8 @@
         container.appendChild(media);
         document.getElementById('messages').appendChild(container);
     }
-</script>
+        window.onload = fetchMessages;
+    </script>
+
 </body>
 </html>
