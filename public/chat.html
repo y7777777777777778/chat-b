@@ -28,7 +28,7 @@
             chatBox.innerHTML = ""; // 表示をリセット
 
             messages.forEach(msg => {
-                chatBox.innerHTML += `<p><strong>${msg.user}:</strong> ${msg.text}</p>`;
+                chatBox.innerHTML += `<p>${msg.text}</p>`;
             });
         }
 
