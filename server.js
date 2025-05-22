@@ -1,61 +1,47 @@
-const express = require('express');
-const http = require('http');
-const socketIo = require('socket.io');
-const path = require('path');
-const sqlite3 = require('sqlite3').verbose();
+const fs = require("fs");
+const express = require("express");
 
 const app = express();
-const server = http.createServer(app);
-const io = socketIo(server);
+app.use(express.json());
 
-const db = new sqlite3.Database('./chat.db');
-db.run("CREATE TABLE IF NOT EXISTS messages (room TEXT, username TEXT, message TEXT, timestamp TEXT)");
-db.run("CREATE TABLE IF NOT EXISTS pinned (room TEXT, message TEXT)");
-db.run("CREATE TABLE IF NOT EXISTS files (room TEXT, username TEXT, data TEXT, timestamp TEXT)");
+const FILE_PATH = "messages.json";
 
-app.use(express.static(path.join(__dirname, 'public')));
+// メッセージを保存する関数
+function saveMessage(message) {
+  let messages = [];
 
-app.get('/', (req, res) => {
-    res.sendFile(path.join(__dirname, 'public', 'index.html'));
+  if (fs.existsSync(FILE_PATH)) {
+    messages = JSON.parse(fs.readFileSync(FILE_PATH, "utf-8"));
+  }
+
+  messages.push({ text: message, timestamp: new Date().toISOString() });
+
+  fs.writeFileSync(FILE_PATH, JSON.stringify(messages, null, 2));
+}
+
+// メッセージ送信API
+app.post("/send-message", (req, res) => {
+  const { message } = req.body;
+  if (!message) {
+    return res.status(400).json({ error: "Message cannot be empty!" });
+  }
+
+  saveMessage(message);
+  res.status(200).json({ success: true, message: "Message saved!" });
 });
 
-app.get('/chat.html', (req, res) => res.sendFile(path.join(__dirname, 'public', 'chat.html')));
+// メッセージ取得API
+app.get("/messages", (req, res) => {
+  if (!fs.existsSync(FILE_PATH)) {
+    return res.json([]);
+  }
 
-io.on('connection', (socket) => {
-    socket.on('joinRoom', (room) => {
-        socket.join(room);
-        db.all("SELECT * FROM messages WHERE room = ?", [room], (err, rows) => {
-            if (!err) socket.emit('messageHistory', rows);
-        });
-
-        db.get("SELECT message FROM pinned WHERE room = ?", [room], (err, row) => {
-            if (row) socket.emit('updatePinnedMessage', row);
-        });
-
-        db.all("SELECT * FROM files WHERE room = ?", [room], (err, rows) => {
-            if (!err) socket.emit('fileHistory', rows);
-        });
-    });
-
-    socket.on('message', (data) => {
-        db.run("INSERT INTO messages (room, username, message, timestamp) VALUES (?, ?, ?, ?)", 
-               [data.room, data.username, data.message, new Date().toISOString()]);
-        io.to(data.room).emit('message', data);
-    });
-
-    socket.on('pinMessage', (data) => {
-        db.run("DELETE FROM pinned WHERE room = ?", [data.room]); // 以前のピンを削除
-        db.run("INSERT INTO pinned (room, message) VALUES (?, ?)", [data.room, data.message]);
-        io.to(data.room).emit('updatePinnedMessage', data);
-    });
-
-    socket.on('file', (file) => {
-        db.run("INSERT INTO files (room, username, data, timestamp) VALUES (?, ?, ?, ?)", 
-               [file.room, file.username, file.data, new Date().toISOString()]);
-        io.to(file.room).emit('file', file);
-    });
+  const messages = JSON.parse(fs.readFileSync(FILE_PATH, "utf-8"));
+  res.json(messages);
 });
 
-server.listen(process.env.PORT || 5000, () => {
-    console.log("🚀 サーバーがポート 5000 で起動しました！");
+// サーバー起動
+const PORT = 3000;
+app.listen(PORT, () => {
+  console.log(`Server is running on http://localhost:${PORT}`);
 });
