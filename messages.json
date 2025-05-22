@@ -1,19 +1,19 @@
 [
   {
-    "user": "Yoshimasa",
-    "text": "こんにちは！",
+    "user": "gest",
+    "text": "送信テスト",
     "room": "雑談部屋",
     "timestamp": "2025-05-22T18:50:00Z"
   },
   {
-    "user": "Taro",
+    "user": "gest",
     "file": "/uploads/image123.jpg",
     "room": "雑談部屋",
     "timestamp": "2025-05-22T18:55:00Z"
   },
   {
     "user": "Guest",
-    "text": "ファイルも送れるよ！",
+    "text": "ファイル送信テスト",
     "file": "/uploads/video456.mp4",
     "room": "雑談部屋2",
     "timestamp": "2025-05-22T19:00:00Z"
