@@ -1,46 +1,55 @@
+
 const fs = require("fs");
 const express = require("express");
-const multer = require("multer");
 
 const app = express();
 app.use(express.json());
-app.use(express.static("uploads"));
-
-const upload = multer({ dest: "uploads/" });
 
 const FILE_PATH = "messages.json";
 
+// メッセージを保存する関数
 function saveMessage(data) {
-    let messages = [];
-    if (fs.existsSync(FILE_PATH)) {
-        messages = JSON.parse(fs.readFileSync(FILE_PATH, "utf-8"));
-    }
-    messages.push(data);
-    fs.writeFileSync(FILE_PATH, JSON.stringify(messages, null, 2));
+  let messages = [];
+
+  // 既存のデータを読み込む（ファイルが存在する場合）
+  if (fs.existsSync(FILE_PATH)) {
+    messages = JSON.parse(fs.readFileSync(FILE_PATH, "utf-8"));
+  }
+
+  // 新しいデータ（メッセージ or ファイル）を追加
+  messages.push(data);
+
+  // JSONファイルに保存
+  fs.writeFileSync(FILE_PATH, JSON.stringify(messages, null, 2));
 }
 
+// メッセージ送信API
 app.post("/send-message", (req, res) => {
-    const { message, username, room } = req.body;
-    if (!message) return res.status(400).json({ error: "Message cannot be empty!" });
+  const { message, file } = req.body;
+  if (!message && !file) {
+    return res.status(400).json({ error: "Message or file must be provided!" });
+  }
 
-    saveMessage({ user: username, text: message, room });
-    res.status(200).json({ success: true });
+  const newEntry = { timestamp: new Date().toISOString() };
+  if (message) newEntry.text = message;
+  if (file) newEntry.file = file;
+
+  saveMessage(newEntry);
+  res.status(200).json({ success: true, message: "Data saved!" });
 });
 
-app.post("/upload", upload.single("file"), (req, res) => {
-    if (!req.file) return res.status(400).json({ error: "File upload failed!" });
-
-    const fileUrl = `/uploads/${req.file.filename}`;
-    saveMessage({ user: req.body.username, file: fileUrl, room: req.body.room });
-    res.status(200).json({ success: true, fileUrl });
-});
-
+// メッセージ取得API
 app.get("/messages", (req, res) => {
-    if (!fs.existsSync(FILE_PATH)) return res.json([]);
-    const messages = JSON.parse(fs.readFileSync(FILE_PATH, "utf-8"));
-    res.json(messages);
+  if (!fs.existsSync(FILE_PATH)) {
+    return res.json([]);
+  }
+
+  const messages = JSON.parse(fs.readFileSync(FILE_PATH, "utf-8"));
+  res.json(messages);
 });
 
-app.listen(3000, () => {
-    console.log("Server is running on http://localhost:3000");
+// サーバー起動
+const PORT = 3000;
+app.listen(PORT, () => {
+  console.log(`Server is running on http://localhost:${PORT}`);
 });
