@@ -1,24 +1,29 @@
 const fs = require("fs");
 const express = require("express");
+const crypto = require("crypto");
 
 const app = express();
 app.use(express.json());
 
-const FILE_PATH = "messages.json";
+const FILE_PATH = "chat_messages.json";
+
+// ランダムなユーザー名を生成する関数
+function generateUsername() {
+  return "@user" + crypto.randomInt(1000, 9999); // 例: @user4567
+}
 
 // メッセージを保存する関数
 function saveMessage(message) {
   let messages = [];
-  
-  // 既存のデータを読み込む（ファイルが存在する場合）
+
   if (fs.existsSync(FILE_PATH)) {
     messages = JSON.parse(fs.readFileSync(FILE_PATH, "utf-8"));
   }
 
-  // 新しいメッセージを追加
-  messages.push({ text: message, timestamp: new Date().toISOString() });
+  const username = generateUsername(); // ランダムなユーザー名を取得
 
-  // JSONファイルに保存
+  messages.push({ user: username, text: message, timestamp: new Date().toISOString() });
+
   fs.writeFileSync(FILE_PATH, JSON.stringify(messages, null, 2));
 }
 
@@ -30,7 +35,7 @@ app.post("/send-message", (req, res) => {
   }
 
   saveMessage(message);
-  res.status(200).json({ success: true, message: "Message saved!" });
+  res.status(200).json({ success: true, message: "Message saved with random username!" });
 });
 
 // メッセージ取得API
