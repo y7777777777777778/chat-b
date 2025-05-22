@@ -1,50 +1,15 @@
-const fs = require("fs");
-const express = require("express");
-
-const app = express();
-app.use(express.json());
-
-const FILE_PATH = "messages.json";
-
-// メッセージを保存する関数
-function saveMessage(message) {
-  let messages = [];
-  
-  // 既存のデータを読み込む（ファイルが存在する場合）
-  if (fs.existsSync(FILE_PATH)) {
-    messages = JSON.parse(fs.readFileSync(FILE_PATH, "utf-8"));
+[
+  {
+    "text": "こんにちは！",
+    "timestamp": "2025-05-22T18:50:00Z"
+  },
+  {
+    "file": "/uploads/image123.jpg",
+    "timestamp": "2025-05-22T18:55:00Z"
+  },
+  {
+    "text": "ファイルも送れるよ！",
+    "file": "/uploads/video456.mp4",
+    "timestamp": "2025-05-22T19:00:00Z"
   }
-
-  // 新しいメッセージを追加
-  messages.push({ text: message, timestamp: new Date().toISOString() });
-
-  // JSONファイルに保存
-  fs.writeFileSync(FILE_PATH, JSON.stringify(messages, null, 2));
-}
-
-// メッセージ送信API
-app.post("/send-message", (req, res) => {
-  const { message } = req.body;
-  if (!message) {
-    return res.status(400).json({ error: "Message cannot be empty!" });
-  }
-
-  saveMessage(message);
-  res.status(200).json({ success: true, message: "Message saved!" });
-});
-
-// メッセージ取得API
-app.get("/messages", (req, res) => {
-  if (!fs.existsSync(FILE_PATH)) {
-    return res.json([]);
-  }
-
-  const messages = JSON.parse(fs.readFileSync(FILE_PATH, "utf-8"));
-  res.json(messages);
-});
-
-// サーバー起動
-const PORT = 3000;
-app.listen(PORT, () => {
-  console.log(`Server is running on http://localhost:${PORT}`);
-});
+]
