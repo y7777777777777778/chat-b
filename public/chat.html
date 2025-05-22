@@ -19,11 +19,11 @@
     <h2>部屋選択</h2>
     <select id="roomSelect">
         <option value="雑談部屋">雑談部屋</option>
-        <option value="雑談部屋2">雑談部屋2</option>
+        <option value="開発部屋">開発部屋</option>
     </select>
     <button id="joinRoom">部屋に入る</button>
 
-    <h2>チャットルーム</h2>
+    <h2>チャットルーム: <span id="roomTitle">雑談部屋</span></h2>
     <div id="chat-box"></div>
 
     <input type="text" id="message-input" placeholder="メッセージを入力...">
@@ -43,21 +43,32 @@
         document.getElementById("joinRoom").addEventListener("click", () => {
             currentRoom = document.getElementById("roomSelect").value;
             localStorage.setItem("currentRoom", currentRoom);
+            document.getElementById("roomTitle").textContent = currentRoom;
             socket.emit("joinRoom", currentRoom);
             fetchMessages();
         });
 
         async function fetchMessages() {
-            const response = await fetch("/messages");
+            const response = await fetch(`/messages?room=${currentRoom}`);
             const messages = await response.json();
             const chatBox = document.getElementById("chat-box");
             chatBox.innerHTML = ""; 
 
             messages.forEach(msg => {
                 let pinned = msg.pinned ? "📌" : "";
-                let displayMsg = msg.text || `<a href="${msg.file}" target="_blank">📎 ファイル</a>`;
+                let displayMsg = msg.text ? msg.text : getFilePreview(msg.file);
                 chatBox.innerHTML += `<p><strong>${msg.user}:</strong> ${displayMsg} ${pinned}</p>`;
             });
+        }
+
+        function getFilePreview(fileUrl) {
+            if (fileUrl.match(/\.(png|jpg|jpeg|gif)$/)) {
+                return `<img src="${fileUrl}" width="100">`;
+            } else if (fileUrl.match(/\.(mp4|webm)$/)) {
+                return `<video src="${fileUrl}" controls width="150"></video>`;
+            } else {
+                return `<a href="${fileUrl}" target="_blank">📎 ファイルを開く</a>`;
+            }
         }
 
         function sendMessage() {
@@ -113,11 +124,12 @@
 
         socket.on("message", (data) => {
             let pinned = data.pinned ? "📌" : "";
-            let displayMsg = data.text || `<a href="${data.file}" target="_blank">📎 ファイル</a>`;
+            let displayMsg = data.text ? data.text : getFilePreview(data.file);
             document.getElementById("chat-box").innerHTML += `<p><strong>${data.user}:</strong> ${displayMsg} ${pinned}</p>`;
         });
 
         window.onload = () => {
+            document.getElementById("roomTitle").textContent = currentRoom;
             socket.emit("joinRoom", currentRoom);
             fetchMessages();
         };
