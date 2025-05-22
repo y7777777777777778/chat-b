@@ -1,4 +1,3 @@
-
 const fs = require("fs");
 const path = require("path");
 const express = require("express");
@@ -13,14 +12,21 @@ app.use(express.json());
 app.use(express.static("public"));
 app.use(fileUpload());
 
-const FILE_PATH = "messages.json";
-let pinnedMessages = {};
+const MESSAGE_FILE = "messages.json";
+const PINNED_FILE = "pinnedMessages.json";
 
-// メッセージを保存する関数
+// メッセージを保存
 function saveMessage(data) {
-    let messages = fs.existsSync(FILE_PATH) ? JSON.parse(fs.readFileSync(FILE_PATH, "utf-8")) : [];
+    let messages = fs.existsSync(MESSAGE_FILE) ? JSON.parse(fs.readFileSync(MESSAGE_FILE, "utf-8")) : [];
     messages.push(data);
-    fs.writeFileSync(FILE_PATH, JSON.stringify(messages, null, 2));
+    fs.writeFileSync(MESSAGE_FILE, JSON.stringify(messages, null, 2));
+}
+
+// ピン止めメッセージを保存
+function savePinnedMessage(room, message) {
+    let pinned = fs.existsSync(PINNED_FILE) ? JSON.parse(fs.readFileSync(PINNED_FILE, "utf-8")) : {};
+    pinned[room] = message;
+    fs.writeFileSync(PINNED_FILE, JSON.stringify(pinned, null, 2));
 }
 
 // ルートアクセス時に `chat.html` を提供
@@ -40,45 +46,38 @@ app.post("/send-message", (req, res) => {
     res.status(200).json({ success: true });
 });
 
-// ファイルアップロードAPI
-app.post("/upload", (req, res) => {
-    if (!req.files || !req.files.file) {
-        return res.status(400).json({ error: "No file uploaded!" });
-    }
+// ピン止めAPI
+app.post("/pin-message", (req, res) => {
+    const { message, room } = req.body;
+    if (!message) return res.status(400).json({ error: "Pinned message cannot be empty!" });
 
-    const file = req.files.file;
-    const filePath = `public/uploads/${file.name}`;
+    savePinnedMessage(room, message);
+    io.to(room).emit("updatePinnedMessage", { message });
 
-    file.mv(filePath, (err) => {
-        if (err) return res.status(500).json({ error: err.message });
-
-        const fileUrl = `/uploads/${file.name}`;
-        const fileMessage = { user: req.body.username, file: fileUrl, room: req.body.room, timestamp: new Date().toISOString() };
-        saveMessage(fileMessage);
-        io.to(req.body.room).emit("message", fileMessage);
-
-        res.json({ success: true, fileUrl });
-    });
+    res.status(200).json({ success: true });
 });
 
 // メッセージ取得API
 app.get("/messages", (req, res) => {
-    if (!fs.existsSync(FILE_PATH)) return res.json([]);
-    const messages = JSON.parse(fs.readFileSync(FILE_PATH, "utf-8"));
-    res.json(messages);
+    if (!fs.existsSync(MESSAGE_FILE)) return res.json([]);
+    res.json(JSON.parse(fs.readFileSync(MESSAGE_FILE, "utf-8")));
 });
 
-// Socket.IOの接続処理
+// ピン止めメッセージ取得API
+app.get("/pinned-messages", (req, res) => {
+    if (!fs.existsSync(PINNED_FILE)) return res.json({});
+    res.json(JSON.parse(fs.readFileSync(PINNED_FILE, "utf-8")));
+});
+
+// Socket.IOの処理
 io.on("connection", (socket) => {
     socket.on("joinRoom", (room) => {
         socket.join(room);
-        socket.emit("messageHistory", JSON.parse(fs.readFileSync(FILE_PATH, "utf-8")).filter(m => m.room === room));
-        if (pinnedMessages[room]) socket.emit("updatePinnedMessage", { message: pinnedMessages[room] });
-    });
+        const messages = fs.existsSync(MESSAGE_FILE) ? JSON.parse(fs.readFileSync(MESSAGE_FILE, "utf-8")) : [];
+        socket.emit("messageHistory", messages.filter(m => m.room === room));
 
-    socket.on("pinMessage", (data) => {
-        pinnedMessages[data.room] = data.message;
-        io.to(data.room).emit("updatePinnedMessage", { message: data.message });
+        const pinned = fs.existsSync(PINNED_FILE) ? JSON.parse(fs.readFileSync(PINNED_FILE, "utf-8")) : {};
+        if (pinned[room]) socket.emit("updatePinnedMessage", { message: pinned[room] });
     });
 });
 
