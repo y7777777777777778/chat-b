@@ -39,7 +39,7 @@ app.post("/send-message", (req, res) => {
     const { message, username, room } = req.body;
     if (!message) return res.status(400).json({ error: "Message cannot be empty!" });
 
-    const newMessage = { user: username, text: message, room, timestamp: new Date().toISOString() };
+    const newMessage = { user: username, text: message, room, timestamp: new Date().toISOString(), pinned: false };
     saveMessage(newMessage);
     io.to(room).emit("message", newMessage);
 
@@ -67,6 +67,27 @@ app.get("/messages", (req, res) => {
 app.get("/pinned-messages", (req, res) => {
     if (!fs.existsSync(PINNED_FILE)) return res.json({});
     res.json(JSON.parse(fs.readFileSync(PINNED_FILE, "utf-8")));
+});
+
+// ファイルアップロードAPI
+app.post("/upload", (req, res) => {
+    if (!req.files || !req.files.file) {
+        return res.status(400).json({ error: "No file uploaded!" });
+    }
+
+    const file = req.files.file;
+    const filePath = `public/uploads/${file.name}`;
+
+    file.mv(filePath, (err) => {
+        if (err) return res.status(500).json({ error: err.message });
+
+        const fileUrl = `/uploads/${file.name}`;
+        const fileMessage = { user: req.body.username, file: fileUrl, room: req.body.room, timestamp: new Date().toISOString(), pinned: false };
+        saveMessage(fileMessage);
+        io.to(req.body.room).emit("message", fileMessage);
+
+        res.json({ success: true, fileUrl });
+    });
 });
 
 // Socket.IOの処理
