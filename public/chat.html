@@ -32,9 +32,6 @@
     <input type="text" id="message-input" placeholder="メッセージを入力...">
     <button id="send-button">送信</button>
 
-    <input type="file" id="fileInput">
-    <button id="send-file-button">ファイル送信</button>
-
     <script>
         const socket = io();
         const username = localStorage.getItem("username") || "ゲスト";
@@ -62,32 +59,18 @@
                 let pinnedClass = msg.pinned ? "class='pinned'" : "";
                 
                 chatBox.innerHTML += `<p ${pinnedClass}><strong>${msg.user}:</strong> ${displayMsg} 
-                                      <button onclick="togglePin('${msg.text}')">${pinnedIcon}</button></p>`;
+                                      <button onclick="togglePin('${msg.text}', ${msg.pinned})">${pinnedIcon}</button></p>`;
             });
         }
 
-        function togglePin(message) {
-            if (!message.trim()) return;
-
+        function togglePin(message, isPinned) {
             fetch("/pin-message", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ message, room: currentRoom })
+                body: JSON.stringify({ message, room: currentRoom, pinned: !isPinned })
             }).then(() => {
                 fetchMessages();
             });
-        }
-
-        function getFilePreview(fileUrl) {
-            if (fileUrl.match(/\.(png|jpg|jpeg|gif)$/)) {
-                return `<button onclick="showImage('${fileUrl}')">🔍 画像を表示</button>`;
-            } else if (fileUrl.match(/\.(mp4|webm)$/)) {
-                return `<video src="${fileUrl}" controls width="150"></video>`;
-            } else if (fileUrl.match(/\.(pdf|txt)$/)) {
-                return `<iframe src="${fileUrl}" width="100%" height="300px"></iframe>`;
-            } else {
-                return `<a href="${fileUrl}" target="_blank">📎 ファイルを開く</a>`;
-            }
         }
 
         document.getElementById("send-button").addEventListener("click", () => {
