@@ -31,7 +31,6 @@
 
     <input type="text" id="message-input" placeholder="メッセージを入力...">
     <button id="send-button">送信</button>
-    <button id="pin-button">📌 ピン止め</button>
 
     <input type="file" id="fileInput">
     <button id="send-file-button">ファイル送信</button>
@@ -68,7 +67,20 @@
                 let displayMsg = msg.text ? msg.text : getFilePreview(msg.file);
                 let pinnedClass = msg.pinned ? "class='pinned'" : "";
                 
-                chatBox.innerHTML += `<p ${pinnedClass}><strong>${msg.user}:</strong> ${displayMsg} ${pinnedIcon}</p>`;
+                chatBox.innerHTML += `<p ${pinnedClass}><strong>${msg.user}:</strong> ${displayMsg} ${pinnedIcon} 
+                                      <button onclick="pinMessage('${msg.text}')">📌 ピン止め</button></p>`;
+            });
+        }
+
+        function pinMessage(message) {
+            if (!message.trim()) return;
+
+            fetch("/pin-message", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ message, room: currentRoom })
+            }).then(() => {
+                fetchMessages();
             });
         }
 
@@ -93,7 +105,7 @@
             document.getElementById("imageModal").style.display = "none";
         }
 
-        function sendMessage() {
+        document.getElementById("send-button").addEventListener("click", () => {
             const message = document.getElementById("message-input").value;
             if (!message.trim()) return;
 
@@ -105,30 +117,26 @@
                 document.getElementById("message-input").value = "";
                 fetchMessages();
             });
-        }
+        });
 
-        function pinMessage() {
-            const message = document.getElementById("message-input").value;
-            if (!message.trim()) return;
+        document.getElementById("send-file-button").addEventListener("click", () => {
+            const fileInput = document.getElementById("fileInput").files[0];
+            if (!fileInput) {
+                alert("ファイルを選択してください！");
+                return;
+            }
 
-            fetch("/pin-message", {
+            const formData = new FormData();
+            formData.append("file", fileInput);
+            formData.append("username", username);
+            formData.append("room", currentRoom);
+
+            fetch("/upload", {
                 method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ message, room: currentRoom })
+                body: formData
             }).then(() => {
                 fetchMessages();
             });
-        }
-
-        document.getElementById("send-button").addEventListener("click", sendMessage);
-        document.getElementById("pin-button").addEventListener("click", pinMessage);
-
-        socket.on("message", (data) => {
-            let pinnedIcon = data.pinned ? "📌" : "";
-            let displayMsg = data.text ? data.text : getFilePreview(data.file);
-            let pinnedClass = data.pinned ? "class='pinned'" : "";
-            
-            document.getElementById("chat-box").innerHTML += `<p ${pinnedClass}><strong>${data.user}:</strong> ${displayMsg} ${pinnedIcon}</p>`;
         });
 
         window.onload = () => {
