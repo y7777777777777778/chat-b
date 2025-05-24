@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html lang="ja">
 <head>
@@ -25,9 +24,6 @@
         .room-container { margin: 20px 0; }
         .room-button { display: inline-block; width: 120px; height: 40px; line-height: 40px; border: 2px solid #000; cursor: pointer; margin: 5px; transition: 0.3s; }
         .room-button:hover { background-color: #ddd; transform: scale(1.05); }
-        #fileModal { display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.8); text-align:center; }
-        #fileModalContent { margin-top:50px; }
-        .close-button { position:absolute; top:10px; right:10px; background:red; color:white; padding:5px; cursor:pointer; }
     </style>
 </head>
 <body>
@@ -48,12 +44,6 @@
 
     <input type="file" id="fileInput">
     <button id="send-file-button">ファイル送信</button>
-
-    <!-- ファイル拡大表示用モーダル -->
-    <div id="fileModal">
-        <div id="fileModalContent"></div>
-        <button class="close-button" onclick="closeModal()">閉じる</button>
-    </div>
 
     <script>
         const socket = io();
@@ -96,52 +86,29 @@
             }
         }
 
-        function showFile(fileUrl, type) {
-            let content = "";
-            if (type === "image") {
-                content = `<img src="${fileUrl}" alt="拡大表示画像" style="max-width:90%; max-height:90%;">`;
-            } else if (type === "video") {
-                content = `<video src="${fileUrl}" controls autoplay style="max-width:90%; max-height:90%;"></video>`;
-            } else if (type === "document") {
-                content = `<iframe src="${fileUrl}" width="90%" height="90%"></iframe>`;
-            }
-
-            document.getElementById("fileModalContent").innerHTML = content;
-            document.getElementById("fileModal").style.display = "block";
-        }
-
-        function closeModal() {
-            document.getElementById("fileModal").style.display = "none";
-        }
-
-        document.getElementById("send-file-button").addEventListener("click", async () => {
-            const fileInput = document.getElementById("fileInput").files[0];
-            if (!fileInput) {
-                alert("ファイルを選択してください！");  
+        document.getElementById("send-button").addEventListener("click", () => {
+            const message = document.getElementById("message-input").value.trim();
+            if (!message) {
+                alert("メッセージを入力してください！");
                 return;
             }
 
-            const formData = new FormData();
-            formData.append("file", fileInput);
-            formData.append("username", username);
-            formData.append("room", currentRoom);
-
-            try {
-                const response = await fetch("/upload", {
-                    method: "POST",
-                    body: formData
-                });
-
-                const result = await response.json();
-                if (result.success) {
-                    fetchMessages();
-                } else {
-                    alert("ファイル送信に失敗しました！💥");
-                }
-            } catch (error) {
-                console.error("ファイル送信エラー:", error);
-                alert("ファイル送信中に問題が発生しました！💥");
-            }
+            fetch("/send-message", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ message, username, room: currentRoom })
+            }).then(response => response.json())
+              .then(result => {
+                  if (result.success) {
+                      document.getElementById("message-input").value = "";
+                      fetchMessages(); // 送信後にメッセージを更新！
+                  } else {
+                      alert("メッセージの送信に失敗しました！💥");
+                  }
+              }).catch(error => {
+                  console.error("メッセージ送信エラー:", error);
+                  alert("メッセージ送信中に問題が発生しました！💥");
+              });
         });
 
         window.onload = () => {
