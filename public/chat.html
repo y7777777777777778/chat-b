@@ -35,12 +35,6 @@
     <input type="file" id="fileInput">
     <button id="send-file-button">ファイル送信</button>
 
-    <!-- 画像拡大表示用 -->
-    <div id="imageModal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.8); text-align:center;">
-        <img id="modalImage" style="max-width:90%; max-height:90%; margin-top:50px;">
-        <button onclick="closeModal()" style="position:absolute; top:10px; right:10px; background:red; color:white;">閉じる</button>
-    </div>
-
     <script>
         const socket = io();
         const username = localStorage.getItem("username") || "ゲスト";
@@ -63,16 +57,16 @@
             chatBox.innerHTML = ""; 
 
             messages.forEach(msg => {
-                let pinnedIcon = msg.pinned ? "📌" : "";
+                let pinnedIcon = msg.pinned ? "📌 ピン止め済み" : "📌 ピン止めなし";
                 let displayMsg = msg.text ? msg.text : getFilePreview(msg.file);
                 let pinnedClass = msg.pinned ? "class='pinned'" : "";
                 
-                chatBox.innerHTML += `<p ${pinnedClass}><strong>${msg.user}:</strong> ${displayMsg} ${pinnedIcon} 
-                                      <button onclick="pinMessage('${msg.text}')">📌 ピン止め</button></p>`;
+                chatBox.innerHTML += `<p ${pinnedClass}><strong>${msg.user}:</strong> ${displayMsg} 
+                                      <button onclick="togglePin('${msg.text}')">${pinnedIcon}</button></p>`;
             });
         }
 
-        function pinMessage(message) {
+        function togglePin(message) {
             if (!message.trim()) return;
 
             fetch("/pin-message", {
@@ -96,15 +90,6 @@
             }
         }
 
-        function showImage(fileUrl) {
-            document.getElementById("modalImage").src = fileUrl;
-            document.getElementById("imageModal").style.display = "block";
-        }
-
-        function closeModal() {
-            document.getElementById("imageModal").style.display = "none";
-        }
-
         document.getElementById("send-button").addEventListener("click", () => {
             const message = document.getElementById("message-input").value;
             if (!message.trim()) return;
@@ -115,26 +100,6 @@
                 body: JSON.stringify({ message, username, room: currentRoom })
             }).then(() => {
                 document.getElementById("message-input").value = "";
-                fetchMessages();
-            });
-        });
-
-        document.getElementById("send-file-button").addEventListener("click", () => {
-            const fileInput = document.getElementById("fileInput").files[0];
-            if (!fileInput) {
-                alert("ファイルを選択してください！");
-                return;
-            }
-
-            const formData = new FormData();
-            formData.append("file", fileInput);
-            formData.append("username", username);
-            formData.append("room", currentRoom);
-
-            fetch("/upload", {
-                method: "POST",
-                body: formData
-            }).then(() => {
                 fetchMessages();
             });
         });
