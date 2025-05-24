@@ -111,6 +111,36 @@
               });
         });
 
+        document.getElementById("send-file-button").addEventListener("click", async () => {
+            const fileInput = document.getElementById("fileInput").files[0];
+            if (!fileInput) {
+                alert("ファイルを選択してください！");
+                return;
+            }
+
+            const formData = new FormData();
+            formData.append("file", fileInput);
+            formData.append("username", username);
+            formData.append("room", currentRoom);
+
+            try {
+                const response = await fetch("/upload", {
+                    method: "POST",
+                    body: formData
+                });
+
+                const result = await response.json();
+                if (result.success) {
+                    fetchMessages(); // 送信後にメッセージを更新！
+                } else {
+                    alert("ファイル送信に失敗しました！💥");
+                }
+            } catch (error) {
+                console.error("ファイル送信エラー:", error);
+                alert("ファイル送信中に問題が発生しました！💥");
+            }
+        });
+
         window.onload = () => {
             document.getElementById("roomTitle").textContent = currentRoom;
             socket.emit("joinRoom", currentRoom);
