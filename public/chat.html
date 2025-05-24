@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html lang="ja">
 <head>
@@ -63,8 +62,10 @@
         }
 
         function getFilePreview(fileUrl) {
+            if (!fileUrl) return ""; 
+
             if (fileUrl.match(/\.(png|jpg|jpeg|gif)$/)) {
-                return `<button onclick="showImage('${fileUrl}')">🔍 画像を表示</button>`;
+                return `<img src="${fileUrl}" alt="送信された画像" width="150">`;
             } else if (fileUrl.match(/\.(mp4|webm)$/)) {
                 return `<video src="${fileUrl}" controls width="150"></video>`;
             } else if (fileUrl.match(/\.(pdf|txt)$/)) {
