@@ -57,7 +57,7 @@
             chatBox.innerHTML = ""; 
 
             messages.forEach(msg => {
-                
+                let pinnedIcon = msg.pinned ? "" : "";
                 let displayMsg = msg.text ? msg.text : getFilePreview(msg.file);
                 let pinnedClass = msg.pinned ? "class='pinned'" : "";
                 
