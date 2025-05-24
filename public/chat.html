@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="ja">
 <head>
@@ -9,7 +10,18 @@
         body { font-family: Arial, sans-serif; text-align: center; }
         #chat-box { border: 1px solid #ccc; padding: 10px; height: 300px; overflow-y: auto; text-align: left; }
         #message-input, #fileInput { width: 80%; }
-        #send-button, #send-file-button { width: 18%; }
+        #send-button, #send-file-button { 
+            width: 120px; 
+            height: 40px; 
+            background-color: #0078D7; 
+            color: white; 
+            font-size: 16px; 
+            border: none; 
+            border-radius: 8px; 
+            cursor: pointer; 
+            transition: 0.3s; 
+        }
+        #send-button:hover, #send-file-button:hover { background-color: #005A9E; }
         .room-container { margin: 20px 0; }
         .room-button { display: inline-block; width: 120px; height: 40px; line-height: 40px; border: 2px solid #000; cursor: pointer; margin: 5px; transition: 0.3s; }
         .room-button:hover { background-color: #ddd; transform: scale(1.05); }
@@ -114,36 +126,6 @@
                 document.getElementById("message-input").value = "";
                 fetchMessages();
             });
-        });
-
-        document.getElementById("send-file-button").addEventListener("click", async () => {
-            const fileInput = document.getElementById("fileInput").files[0];
-            if (!fileInput) {
-                alert("ファイルを選択してください！");  
-                return;
-            }
-
-            const formData = new FormData();
-            formData.append("file", fileInput);
-            formData.append("username", username);
-            formData.append("room", currentRoom);
-
-            try {
-                const response = await fetch("/upload", {
-                    method: "POST",
-                    body: formData
-                });
-
-                const result = await response.json();
-                if (result.success) {
-                    fetchMessages();
-                } else {
-                    alert("ファイル送信に失敗しました！💥");
-                }
-            } catch (error) {
-                console.error("ファイル送信エラー:", error);
-                alert("ファイル送信中に問題が発生しました！💥");
-            }
         });
 
         window.onload = () => {
