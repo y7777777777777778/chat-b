@@ -10,18 +10,7 @@
         body { font-family: Arial, sans-serif; text-align: center; }
         #chat-box { border: 1px solid #ccc; padding: 10px; height: 300px; overflow-y: auto; text-align: left; }
         #message-input, #fileInput { width: 80%; }
-        #send-button, #send-file-button { 
-            width: 120px; 
-            height: 40px; 
-            background-color: #0078D7; 
-            color: white; 
-            font-size: 16px; 
-            border: none; 
-            border-radius: 8px; 
-            cursor: pointer; 
-            transition: 0.3s; 
-        }
-        #send-button:hover, #send-file-button:hover { background-color: #005A9E; }
+        #send-button, #send-file-button { width: 18%; }
         .room-container { margin: 20px 0; }
         .room-button { display: inline-block; width: 120px; height: 40px; line-height: 40px; border: 2px solid #000; cursor: pointer; margin: 5px; transition: 0.3s; }
         .room-button:hover { background-color: #ddd; transform: scale(1.05); }
@@ -77,7 +66,7 @@
             chatBox.innerHTML = ""; 
 
             messages.forEach(msg => {
-                let displayMsg = msg.text ? msg.text : getFilePreview(msg.fileUrl);
+                let displayMsg = msg.text ? msg.text : getFilePreview(msg.file);
                 chatBox.innerHTML += `<p><strong>${msg.user}:</strong> ${displayMsg}</p>`;
             });
         }
@@ -96,10 +85,42 @@
             }
         }
 
+        function showFile(fileUrl, type) {
+            let content = "";
+            if (type === "image") {
+                content = `<img src="${fileUrl}" alt="拡大表示画像" style="max-width:90%; max-height:90%;">`;
+            } else if (type === "video") {
+                content = `<video src="${fileUrl}" controls autoplay style="max-width:90%; max-height:90%;"></video>`;
+            } else if (type === "document") {
+                content = `<iframe src="${fileUrl}" width="90%" height="90%"></iframe>`;
+            }
+
+            document.getElementById("fileModalContent").innerHTML = content;
+            document.getElementById("fileModal").style.display = "block";
+        }
+
+        function closeModal() {
+            document.getElementById("fileModal").style.display = "none";
+        }
+
+        document.getElementById("send-button").addEventListener("click", () => {
+            const message = document.getElementById("message-input").value;
+            if (!message.trim()) return;
+
+            fetch("/send-message", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ message, username, room: currentRoom })
+            }).then(() => {
+                document.getElementById("message-input").value = "";
+                fetchMessages();
+            });
+        });
+
         document.getElementById("send-file-button").addEventListener("click", async () => {
             const fileInput = document.getElementById("fileInput").files[0];
             if (!fileInput) {
-                alert("ファイルを選択してください！");
+                alert("ファイルを選択してください！");  
                 return;
             }
 
@@ -116,7 +137,7 @@
 
                 const result = await response.json();
                 if (result.success) {
-                    fetchMessages(); // 送信後にメッセージを更新！
+                    fetchMessages();
                 } else {
                     alert("ファイル送信に失敗しました！💥");
                 }
