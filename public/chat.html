@@ -10,13 +10,22 @@
         #chat-box { border: 1px solid #ccc; padding: 10px; height: 300px; overflow-y: auto; text-align: left; }
         #message-input, #fileInput { width: 80%; }
         #send-button, #send-file-button { width: 18%; }
+        .room-container { margin: 20px 0; }
+        .room-button { display: inline-block; width: 120px; height: 40px; line-height: 40px; border: 2px solid #000; cursor: pointer; margin: 5px; transition: 0.3s; }
+        .room-button:hover { background-color: #ddd; transform: scale(1.05); }
     </style>
 </head>
 <body>
     <h1>チャットルーム</h1>
     <p id="usernameDisplay"></p>
 
-    <h2>チャット</h2>
+    <h2>入りたい部屋をクリックしてください</h2>
+    <div class="room-container">
+        <div class="room-button" onclick="joinRoom('雑談部屋')">雑談部屋</div>
+        <div class="room-button" onclick="joinRoom('雑談部屋2')">雑談部屋2</div>
+    </div>
+
+    <h2>チャットルーム: <span id="roomTitle">雑談部屋</span></h2>
     <div id="chat-box"></div>
 
     <input type="text" id="message-input" placeholder="メッセージを入力...">
@@ -28,9 +37,17 @@
     <script>
         const socket = io();
         const username = localStorage.getItem("username") || "ゲスト";
-        const currentRoom = "雑談部屋"; // ピン止め機能なし
+        let currentRoom = localStorage.getItem("currentRoom") || "雑談部屋";
 
         document.getElementById("usernameDisplay").textContent = `ログインユーザー: ${username}`;
+
+        function joinRoom(room) {
+            localStorage.setItem("currentRoom", room);
+            currentRoom = room;
+            document.getElementById("roomTitle").textContent = room;
+            socket.emit("joinRoom", room);
+            fetchMessages();
+        }
 
         async function fetchMessages() {
             const response = await fetch(`/messages?room=${currentRoom}`);
