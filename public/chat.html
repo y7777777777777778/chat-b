@@ -11,8 +11,8 @@
         #message-input, #fileInput { width: 80%; }
         #send-button, #pin-button, #send-file-button { width: 18%; }
         .room-container { margin: 20px 0; }
-        .room-button { display: inline-block; width: 150px; padding: 10px; border: 2px solid #000; cursor: pointer; margin: 5px; }
-        .room-button:hover { background-color: #ddd; }
+        .room-button { display: inline-block; width: 120px; height: 40px; line-height: 40px; border: 2px solid #000; cursor: pointer; margin: 5px; transition: 0.3s; }
+        .room-button:hover { background-color: #ddd; transform: scale(1.05); }
     </style>
 </head>
 <body>
@@ -50,6 +50,7 @@
 
         function joinRoom(room) {
             localStorage.setItem("currentRoom", room);
+            currentRoom = room;
             document.getElementById("roomTitle").textContent = room;
             socket.emit("joinRoom", room);
             fetchMessages();
