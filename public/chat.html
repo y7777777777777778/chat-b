@@ -13,6 +13,7 @@
         .room-container { margin: 20px 0; }
         .room-button { display: inline-block; width: 120px; height: 40px; line-height: 40px; border: 2px solid #000; cursor: pointer; margin: 5px; transition: 0.3s; }
         .room-button:hover { background-color: #ddd; transform: scale(1.05); }
+        .pinned { font-weight: bold; color: red; }
     </style>
 </head>
 <body>
@@ -63,9 +64,11 @@
             chatBox.innerHTML = ""; 
 
             messages.forEach(msg => {
-                let pinned = msg.pinned ? "📌" : "";
+                let pinnedIcon = msg.pinned ? "📌" : "";
                 let displayMsg = msg.text ? msg.text : getFilePreview(msg.file);
-                chatBox.innerHTML += `<p><strong>${msg.user}:</strong> ${displayMsg} ${pinned}</p>`;
+                let pinnedClass = msg.pinned ? "class='pinned'" : "";
+                
+                chatBox.innerHTML += `<p ${pinnedClass}><strong>${msg.user}:</strong> ${displayMsg} ${pinnedIcon}</p>`;
             });
         }
 
@@ -117,34 +120,15 @@
             });
         }
 
-        function sendFile() {
-            const fileInput = document.getElementById("fileInput").files[0];
-            if (!fileInput) {
-                alert("ファイルを選択してください！");
-                return;
-            }
-
-            const formData = new FormData();
-            formData.append("file", fileInput);
-            formData.append("username", username);
-            formData.append("room", currentRoom);
-
-            fetch("/upload", {
-                method: "POST",
-                body: formData
-            }).then(() => {
-                fetchMessages();
-            });
-        }
-
         document.getElementById("send-button").addEventListener("click", sendMessage);
         document.getElementById("pin-button").addEventListener("click", pinMessage);
-        document.getElementById("send-file-button").addEventListener("click", sendFile);
 
         socket.on("message", (data) => {
-            let pinned = data.pinned ? "📌" : "";
+            let pinnedIcon = data.pinned ? "📌" : "";
             let displayMsg = data.text ? data.text : getFilePreview(data.file);
-            document.getElementById("chat-box").innerHTML += `<p><strong>${data.user}:</strong> ${displayMsg} ${pinned}</p>`;
+            let pinnedClass = data.pinned ? "class='pinned'" : "";
+            
+            document.getElementById("chat-box").innerHTML += `<p ${pinnedClass}><strong>${data.user}:</strong> ${displayMsg} ${pinnedIcon}</p>`;
         });
 
         window.onload = () => {
