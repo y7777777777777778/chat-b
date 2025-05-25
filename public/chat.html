@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html lang="ja">
 <head>
@@ -10,7 +9,7 @@
         body { font-family: Arial, sans-serif; text-align: center; }
         #chat-box { border: 1px solid #ccc; padding: 10px; height: 300px; overflow-y: auto; text-align: left; }
         #message-input, #fileInput { width: 80%; }
-        #send-button, #send-file-button { width: 18%; }
+        #send-button, #send-file-button, #delete-button { width: 18%; }
         .room-container { margin: 20px 0; }
         .room-button { display: inline-block; width: 120px; height: 40px; line-height: 40px; border: 2px solid #000; cursor: pointer; margin: 5px; transition: 0.3s; }
         .room-button:hover { background-color: #ddd; transform: scale(1.05); }
@@ -37,6 +36,8 @@
 
     <input type="file" id="fileInput">
     <button id="send-file-button">ファイル送信</button>
+
+    <button id="delete-button">全メッセージ削除（管理者のみ）</button>
 
     <!-- ファイル拡大表示用モーダル -->
     <div id="fileModal">
@@ -76,25 +77,13 @@
 
             if (fileUrl.match(/\.(png|jpg|jpeg|gif)$/)) {
                 return `<button onclick="showFile('${fileUrl}', 'image')">🔍 画像を表示</button>`;
-            } else if (fileUrl.match(/\.(mp4|webm)$/)) {
-                return `<button onclick="showFile('${fileUrl}', 'video')">▶ 動画を再生</button>`;
-            } else if (fileUrl.match(/\.(pdf|txt)$/)) {
-                return `<button onclick="showFile('${fileUrl}', 'document')">📄 ファイルを開く</button>`;
             } else {
                 return `<a href="${fileUrl}" target="_blank">📎 ファイルを開く</a>`;
             }
         }
 
         function showFile(fileUrl, type) {
-            let content = "";
-            if (type === "image") {
-                content = `<img src="${fileUrl}" alt="拡大表示画像" style="max-width:90%; max-height:90%;">`;
-            } else if (type === "video") {
-                content = `<video src="${fileUrl}" controls autoplay style="max-width:90%; max-height:90%;"></video>`;
-            } else if (type === "document") {
-                content = `<iframe src="${fileUrl}" width="90%" height="90%"></iframe>`;
-            }
-
+            let content = `<img src="${fileUrl}" alt="拡大表示画像" style="max-width:90%; max-height:90%;">`;
             document.getElementById("fileModalContent").innerHTML = content;
             document.getElementById("fileModal").style.display = "block";
         }
@@ -103,55 +92,45 @@
             document.getElementById("fileModal").style.display = "none";
         }
 
-        document.getElementById("send-button").addEventListener("click", () => {
-            const message = document.getElementById("message-input").value;
-            if (!message.trim()) return;
+        const adminUsers = {
+            "特急呪物": "yoshi0708",
+            "y": "yoshi0708"
+        };
 
-            fetch("/send-message", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ message, username, room: currentRoom })
-            }).then(() => {
-                document.getElementById("message-input").value = "";
-                fetchMessages();
-            });
-        });
-
-        document.getElementById("send-file-button").addEventListener("click", async () => {
-            const fileInput = document.getElementById("fileInput").files[0];
-            if (!fileInput) {
-                alert("ファイルを選択してください！");  
+        document.getElementById("delete-button").addEventListener("click", async () => {
+            const enteredUsername = prompt("管理者名を入力してください！");
+            if (!adminUsers[enteredUsername]) {
+                alert("権限がありません！💥");
                 return;
             }
 
-            const formData = new FormData();
-            formData.append("file", fileInput);
-            formData.append("username", username);
-            formData.append("room", currentRoom);
+            const enteredPassword = prompt("パスワードを入力してください！");
+            if (enteredPassword !== adminUsers[enteredUsername]) {
+                alert("パスワードが間違っています！💥");
+                return;
+            }
+
+            if (!confirm("本当にすべてのメッセージを削除しますか？")) return;
 
             try {
-                const response = await fetch("/upload", {
+                const response = await fetch("/delete-messages", {
                     method: "POST",
-                    body: formData
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ room: currentRoom })
                 });
 
                 const result = await response.json();
                 if (result.success) {
-                    fetchMessages();
+                    document.getElementById("chat-box").innerHTML = ""; 
+                    alert("すべてのメッセージを削除しました！🔥");
                 } else {
-                    alert("ファイル送信に失敗しました！💥");
+                    alert("メッセージ削除に失敗しました💥");
                 }
             } catch (error) {
-                console.error("ファイル送信エラー:", error);
-                alert("ファイル送信中に問題が発生しました！💥");
+                console.error("削除エラー:", error);
+                alert("メッセージ削除中に問題が発生しました！💥");
             }
         });
-
-        window.onload = () => {
-            document.getElementById("roomTitle").textContent = currentRoom;
-            socket.emit("joinRoom", currentRoom);
-            fetchMessages();
-        };
     </script>
 </body>
 </html>
