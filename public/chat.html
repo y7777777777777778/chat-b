@@ -10,20 +10,13 @@
         body { font-family: Arial, sans-serif; text-align: center; }
         #chat-box { border: 1px solid #ccc; padding: 10px; height: 300px; overflow-y: auto; text-align: left; }
         #message-input, #fileInput { width: 80%; }
-        #send-button, #send-file-button { 
-            width: 18%;
-            background-color: #0078D7;
-            color: white;
-            font-size: 16px;
-            border: none;
-            border-radius: 5px;
-            cursor: pointer;
-            transition: 0.3s;
-        }
-        #send-button:hover, #send-file-button:hover { background-color: #005A9E; }
+        #send-button, #send-file-button { width: 18%; }
         .room-container { margin: 20px 0; }
         .room-button { display: inline-block; width: 120px; height: 40px; line-height: 40px; border: 2px solid #000; cursor: pointer; margin: 5px; transition: 0.3s; }
         .room-button:hover { background-color: #ddd; transform: scale(1.05); }
+        #fileModal { display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.8); text-align:center; }
+        #fileModalContent { margin-top:50px; }
+        .close-button { position:absolute; top:10px; right:10px; background:red; color:white; padding:5px; cursor:pointer; }
     </style>
 </head>
 <body>
@@ -34,7 +27,6 @@
     <div class="room-container">
         <div class="room-button" onclick="joinRoom('雑談部屋')">雑談部屋</div>
         <div class="room-button" onclick="joinRoom('雑談部屋2')">雑談部屋2</div>
-        <div class="room-button" onclick="createNewDM()">🔒 DM</div>
     </div>
 
     <h2>チャットルーム: <span id="roomTitle">雑談部屋</span></h2>
@@ -46,15 +38,20 @@
     <input type="file" id="fileInput">
     <button id="send-file-button">ファイル送信</button>
 
-    <h2>ダイレクトメッセージ</h2>
-    <div id="dm-list"></div>
-    <button onclick="createNewDM()">＋ 新しくDMを開始</button>
+    <h2>ユーザー一覧（DM）</h2>
+    <div id="userList"></div>
+
+    <div id="fileModal">
+        <div id="fileModalContent"></div>
+        <button class="close-button" onclick="closeModal()">閉じる</button>
+    </div>
 
     <script>
         const socket = io();
-        const username = localStorage.getItem("username") || "ゲスト";
-        let currentRoom = localStorage.getItem("currentRoom") || "雑談部屋";
+        const username = localStorage.getItem("username") || prompt("ユーザー名を入力してください") || "ゲスト";
+        localStorage.setItem("username", username);
 
+        let currentRoom = localStorage.getItem("currentRoom") || "雑談部屋";
         document.getElementById("usernameDisplay").textContent = `ログインユーザー: ${username}`;
 
         function joinRoom(room) {
@@ -65,60 +62,19 @@
             fetchMessages();
         }
 
-        function joinDM(user) {
-            let dmUsers = JSON.parse(localStorage.getItem("dmUsers")) || [];
-            if (!dmUsers.includes(user)) dmUsers.push(user);
-            localStorage.setItem("dmUsers", JSON.stringify(dmUsers));
-
-            currentRoom = `DM-${user}`;
-            document.getElementById("roomTitle").textContent = `DM: ${user}`;
-            fetchMessages();
-        }
-
-        function createNewDM() {
-            let dmUsers = JSON.parse(localStorage.getItem("dmUsers")) || [];
-            const newUser = prompt("DMするユーザー名を入力してください！");
-            if (!newUser) return;
-
-            if (!dmUsers.includes(newUser)) {
-                dmUsers.push(newUser);
-                localStorage.setItem("dmUsers", JSON.stringify(dmUsers));
-            }
-
-            joinDM(newUser);
-        }
-
-        function updateDMList() {
-            let dmUsers = JSON.parse(localStorage.getItem("dmUsers")) || [];
-            let dmList = document.getElementById("dm-list");
-            dmList.innerHTML = "";
-
-            if (dmUsers.length === 0) {
-                dmList.innerHTML = "<p>まだDMしたユーザーがいません</p>";
-                return;
-            }
-
-            dmUsers.forEach(user => {
-                let lastMessage = localStorage.getItem(`dm-${user}`) || "まだメッセージなし";
-                dmList.innerHTML += `<p><strong>${user}</strong>: ${lastMessage} <button onclick="joinDM('${user}')">🔒 DM</button></p>`;
-            });
-        }
-
         async function fetchMessages() {
             const response = await fetch(`/messages?room=${currentRoom}`);
             const messages = await response.json();
             const chatBox = document.getElementById("chat-box");
-            chatBox.innerHTML = ""; 
-
+            chatBox.innerHTML = "";
             messages.forEach(msg => {
-                let displayMsg = msg.text ? msg.text : getFilePreview(msg.fileUrl);
+                let displayMsg = msg.text ? msg.text : getFilePreview(msg.file);
                 chatBox.innerHTML += `<p><strong>${msg.user}:</strong> ${displayMsg}</p>`;
             });
         }
 
         function getFilePreview(fileUrl) {
-            if (!fileUrl) return ""; 
-
+            if (!fileUrl) return "";
             if (fileUrl.match(/\.(png|jpg|jpeg|gif)$/)) {
                 return `<button onclick="showFile('${fileUrl}', 'image')">🔍 画像を表示</button>`;
             } else if (fileUrl.match(/\.(mp4|webm)$/)) {
@@ -130,10 +86,80 @@
             }
         }
 
+        function showFile(fileUrl, type) {
+            let content = "";
+            if (type === "image") {
+                content = `<img src="${fileUrl}" style="max-width:90%; max-height:90%;">`;
+            } else if (type === "video") {
+                content = `<video src="${fileUrl}" controls autoplay style="max-width:90%; max-height:90%;"></video>`;
+            } else if (type === "document") {
+                content = `<iframe src="${fileUrl}" width="90%" height="90%"></iframe>`;
+            }
+            document.getElementById("fileModalContent").innerHTML = content;
+            document.getElementById("fileModal").style.display = "block";
+        }
+
+        function closeModal() {
+            document.getElementById("fileModal").style.display = "none";
+        }
+
+        document.getElementById("send-button").addEventListener("click", () => {
+            const message = document.getElementById("message-input").value;
+            if (!message.trim()) return;
+
+            fetch("/send-message", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ message, username, room: currentRoom })
+            }).then(() => {
+                document.getElementById("message-input").value = "";
+                fetchMessages();
+            });
+        });
+
+        document.getElementById("send-file-button").addEventListener("click", async () => {
+            const fileInput = document.getElementById("fileInput").files[0];
+            if (!fileInput) return alert("ファイルを選択してください！");
+
+            const formData = new FormData();
+            formData.append("file", fileInput);
+            formData.append("username", username);
+            formData.append("room", currentRoom);
+
+            try {
+                const response = await fetch("/upload", { method: "POST", body: formData });
+                const result = await response.json();
+                if (result.success) fetchMessages();
+                else alert("ファイル送信に失敗しました！");
+            } catch (err) {
+                console.error("送信エラー:", err);
+                alert("ファイル送信中に問題が発生しました！");
+            }
+        });
+
+        socket.on("message", fetchMessages);
+
+        socket.on("userList", (users) => {
+            const userList = document.getElementById("userList");
+            userList.innerHTML = "";
+            users.forEach(user => {
+                if (user !== username) {
+                    const btn = document.createElement("button");
+                    btn.textContent = `DM: ${user}`;
+                    btn.onclick = () => {
+                        const dmRoom = ["DM", username, user].sort().join("_");
+                        joinRoom(dmRoom);
+                    };
+                    userList.appendChild(btn);
+                }
+            });
+        });
+
         window.onload = () => {
-            updateDMList();
             document.getElementById("roomTitle").textContent = currentRoom;
+            socket.emit("registerUser", username);
             socket.emit("joinRoom", currentRoom);
+            socket.emit("requestUserList");
             fetchMessages();
         };
     </script>
