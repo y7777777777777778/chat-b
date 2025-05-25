@@ -2,156 +2,106 @@
 <!DOCTYPE html>
 <html lang="ja">
 <head>
-  <meta charset="UTF-8" />
-  <title>チャットルーム</title>
-  <script src="/socket.io/socket.io.js"></script>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <style>
-    body { font-family: Arial, sans-serif; text-align: center; }
-    #chat-box { border: 1px solid #ccc; padding: 10px; height: 300px; overflow-y: auto; text-align: left; }
-    #message-input, #fileInput { width: 80%; }
-    #send-button, #send-file-button { width: 18%; }
-    .room-container { margin: 20px 0; }
-    .room-button { display: inline-block; width: 120px; height: 40px; line-height: 40px; border: 2px solid #000; cursor: pointer; margin: 5px; transition: 0.3s; }
-    .room-button:hover { background-color: #ddd; transform: scale(1.05); }
-    #fileModal { display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.8); text-align:center; }
-    #fileModalContent { margin-top:50px; }
-    .close-button { position:absolute; top:10px; right:10px; background:red; color:white; padding:5px; cursor:pointer; }
-  </style>
+    <meta charset="UTF-8">
+    <title>チャットルーム</title>
+    <script src="/socket.io/socket.io.js"></script>
 </head>
 <body>
-  <h1>チャットルーム</h1>
-  <p id="usernameDisplay"></p>
+    <h1>チャットルーム</h1>
+    <p>ログインユーザー: <span id="displayUsername"></span></p>
 
-  <h2>入りたい部屋をクリックしてください</h2>
-  <div class="room-container">
-    <div class="room-button" onclick="joinRoom('雑談部屋')">雑談部屋</div>
-    <div class="room-button" onclick="joinRoom('雑談部屋2')">雑談部屋2</div>
-  </div>
+    <h2>入りたい部屋をクリックしてください</h2>
+    <button onclick="joinRoom('room1')">雑談部屋</button>
+    <button onclick="joinRoom('room2')">雑談部屋2</button>
 
-  <h2>チャットルーム: <span id="roomTitle">雑談部屋</span></h2>
-  <div id="chat-box"></div>
+    <h3 id="roomTitle"></h3>
 
-  <input type="text" id="message-input" placeholder="メッセージを入力..." />
-  <button id="send-button">送信</button>
-  <br><br>
-  <input type="file" id="fileInput" />
-  <button id="send-file-button">ファイル送信</button>
+    <div id="chat"></div>
 
-  <h3>ユーザー一覧（DM）</h3>
-  <div id="userList"></div>
+    <input type="text" id="messageInput" placeholder="メッセージを入力..." />
+    <button onclick="sendMessage()">送信</button>
+    <br><br>
 
-  <div id="fileModal">
-    <div id="fileModalContent"></div>
-    <button class="close-button" onclick="closeModal()">閉じる</button>
-  </div>
+    <input type="file" id="fileInput" />
+    <button onclick="uploadFile()">ファイル送信</button>
 
-  <script>
-    const socket = io();
-    const username = localStorage.getItem("username") || prompt("ユーザー名を入力してください：", "ゲスト");
-    localStorage.setItem("username", username);
+    <h3>ユーザー一覧（DM）</h3>
+    <ul id="userList"></ul>
 
-    let currentRoom = localStorage.getItem("currentRoom") || "雑談部屋";
+    <script>
+        const socket = io();
+        let currentRoom = "";
+        const username = localStorage.getItem("username") || "Guest";
+        document.getElementById("displayUsername").textContent = username;
 
-    document.getElementById("usernameDisplay").textContent = `ログインユーザー: ${username}`;
-
-    function joinRoom(room) {
-      localStorage.setItem("currentRoom", room);
-      currentRoom = room;
-      document.getElementById("roomTitle").textContent = room;
-      socket.emit("joinRoom", room);
-      fetchMessages();
-    }
-
-    async function fetchMessages() {
-      const res = await fetch(`/messages?room=${currentRoom}`);
-      const messages = await res.json();
-      const chatBox = document.getElementById("chat-box");
-      chatBox.innerHTML = "";
-
-      messages.forEach(msg => {
-        const display = msg.text ? msg.text : getFilePreview(msg.file);
-        chatBox.innerHTML += `<p><strong>${msg.user}:</strong> ${display}</p>`;
-      });
-    }
-
-    function getFilePreview(fileUrl) {
-      if (!fileUrl) return "";
-      if (fileUrl.match(/\.(png|jpg|jpeg|gif)$/)) {
-        return `<button onclick="showFile('${fileUrl}', 'image')">🔍 画像を表示</button>`;
-      } else if (fileUrl.match(/\.(mp4|webm)$/)) {
-        return `<button onclick="showFile('${fileUrl}', 'video')">▶ 動画を再生</button>`;
-      } else if (fileUrl.match(/\.(pdf|txt)$/)) {
-        return `<button onclick="showFile('${fileUrl}', 'document')">📄 ファイルを開く</button>`;
-      } else {
-        return `<a href="${fileUrl}" target="_blank">📎 ファイルを開く</a>`;
-      }
-    }
-
-    function showFile(url, type) {
-      let content = "";
-      if (type === "image") content = `<img src="${url}" style="max-width:90%; max-height:90%;" />`;
-      if (type === "video") content = `<video src="${url}" controls autoplay style="max-width:90%; max-height:90%;"></video>`;
-      if (type === "document") content = `<iframe src="${url}" width="90%" height="90%"></iframe>`;
-      document.getElementById("fileModalContent").innerHTML = content;
-      document.getElementById("fileModal").style.display = "block";
-    }
-
-    function closeModal() {
-      document.getElementById("fileModal").style.display = "none";
-    }
-
-    document.getElementById("send-button").addEventListener("click", () => {
-      const message = document.getElementById("message-input").value;
-      if (!message.trim()) return;
-
-      fetch("/send-message", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ message, username, room: currentRoom })
-      }).then(() => {
-        document.getElementById("message-input").value = "";
-        fetchMessages();
-      });
-    });
-
-    document.getElementById("send-file-button").addEventListener("click", async () => {
-      const file = document.getElementById("fileInput").files[0];
-      if (!file) return alert("ファイルを選んでください");
-
-      const formData = new FormData();
-      formData.append("file", file);
-      formData.append("username", username);
-      formData.append("room", currentRoom);
-
-      const res = await fetch("/upload", { method: "POST", body: formData });
-      const result = await res.json();
-      if (result.success) fetchMessages();
-    });
-
-    socket.on("userList", (users) => {
-      const list = document.getElementById("userList");
-      list.innerHTML = "";
-      users.forEach(user => {
-        if (user !== username) {
-          const btn = document.createElement("button");
-          btn.textContent = `DM: ${user}`;
-          btn.onclick = () => {
-            const room = ["DM", username, user].sort().join("_");
-            joinRoom(room);
-          };
-          list.appendChild(btn);
+        function joinRoom(room) {
+            currentRoom = room;
+            document.getElementById("roomTitle").textContent = `チャットルーム: ${room}`;
+            document.getElementById("chat").innerHTML = "";
+            socket.emit("joinRoom", { room, username });
         }
-      });
-    });
 
-    window.onload = () => {
-      document.getElementById("roomTitle").textContent = currentRoom;
-      socket.emit("registerUser", username);
-      socket.emit("joinRoom", currentRoom);
-      socket.emit("requestUserList");
-      fetchMessages();
-    };
-  </script>
+        function sendMessage() {
+            const text = document.getElementById("messageInput").value;
+            fetch("/send-message", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ message: text, username, room: currentRoom })
+            });
+            document.getElementById("messageInput").value = "";
+        }
+
+        function uploadFile() {
+            const fileInput = document.getElementById("fileInput");
+            const file = fileInput.files[0];
+            if (!file) return alert("ファイルを選択してください");
+
+            const formData = new FormData();
+            formData.append("file", file);
+            formData.append("username", username);
+            formData.append("room", currentRoom);
+
+            fetch("/upload", {
+                method: "POST",
+                body: formData
+            });
+        }
+
+        socket.on("message", (data) => {
+            const div = document.createElement("div");
+            if (data.text) {
+                div.innerHTML = `<strong>${data.user}:</strong> ${data.text}`;
+            } else if (data.file) {
+                div.innerHTML = `<strong>${data.user}:</strong> <a href="${data.file}" target="_blank">ファイルを見る</a>`;
+            }
+            document.getElementById("chat").appendChild(div);
+        });
+
+        socket.on("messageHistory", (messages) => {
+            messages.forEach(data => socket.emit("message", data));
+        });
+
+        socket.on("userList", (users) => {
+            const userList = document.getElementById("userList");
+            userList.innerHTML = "";
+            users.forEach(user => {
+                const li = document.createElement("li");
+                li.textContent = user;
+                userList.appendChild(li);
+            });
+        });
+
+        socket.on("updatePinnedMessage", ({ message }) => {
+            const pinned = document.getElementById("pinned");
+            if (pinned) {
+                pinned.textContent = `📌 ピン止め: ${message}`;
+            } else {
+                const p = document.createElement("p");
+                p.id = "pinned";
+                p.textContent = `📌 ピン止め: ${message}`;
+                document.body.insertBefore(p, document.getElementById("chat"));
+            }
+        });
+    </script>
 </body>
 </html>
