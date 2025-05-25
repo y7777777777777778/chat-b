@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html lang="ja">
 <head>
@@ -10,10 +9,13 @@
         body { font-family: Arial, sans-serif; text-align: center; }
         #chat-box { border: 1px solid #ccc; padding: 10px; height: 300px; overflow-y: auto; text-align: left; }
         #message-input, #fileInput { width: 80%; }
-        #send-button, #send-file-button, #delete-button { width: 18%; }
+        #send-button, #send-file-button { width: 18%; }
         .room-container { margin: 20px 0; }
         .room-button { display: inline-block; width: 120px; height: 40px; line-height: 40px; border: 2px solid #000; cursor: pointer; margin: 5px; transition: 0.3s; }
         .room-button:hover { background-color: #ddd; transform: scale(1.05); }
+        #fileModal { display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.8); text-align:center; }
+        #fileModalContent { margin-top:50px; }
+        .close-button { position:absolute; top:10px; right:10px; background:red; color:white; padding:5px; cursor:pointer; }
     </style>
 </head>
 <body>
@@ -35,19 +37,18 @@
     <input type="file" id="fileInput">
     <button id="send-file-button">ファイル送信</button>
 
-    <button id="delete-button" style="display:none;">全メッセージ削除（管理者のみ）</button>
+    <!-- ファイル拡大表示用モーダル -->
+    <div id="fileModal">
+        <div id="fileModalContent"></div>
+        <button class="close-button" onclick="closeModal()">閉じる</button>
+    </div>
 
     <script>
         const socket = io();
         const username = localStorage.getItem("username") || "ゲスト";
         let currentRoom = localStorage.getItem("currentRoom") || "雑談部屋";
-        const adminUsers = ["特急呪物", "y"];
 
         document.getElementById("usernameDisplay").textContent = `ログインユーザー: ${username}`;
-        
-        if (adminUsers.includes(username)) {
-            document.getElementById("delete-button").style.display = "block"; // 管理者のみ削除ボタンを表示
-        }
 
         function joinRoom(room) {
             localStorage.setItem("currentRoom", room);
@@ -59,11 +60,6 @@
 
         async function fetchMessages() {
             const response = await fetch(`/messages?room=${currentRoom}`);
-            if (!response.ok) {
-                console.error("メッセージ取得エラー:", response.status);
-                return;
-            }
-
             const messages = await response.json();
             const chatBox = document.getElementById("chat-box");
             chatBox.innerHTML = ""; 
@@ -102,25 +98,51 @@
             document.getElementById("fileModal").style.display = "block";
         }
 
-        document.getElementById("delete-button").addEventListener("click", async () => {
-            if (!confirm("本当にすべてのメッセージを削除しますか？")) return;
+        function closeModal() {
+            document.getElementById("fileModal").style.display = "none";
+        }
+
+        document.getElementById("send-button").addEventListener("click", () => {
+            const message = document.getElementById("message-input").value;
+            if (!message.trim()) return;
+
+            fetch("/send-message", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ message, username, room: currentRoom })
+            }).then(() => {
+                document.getElementById("message-input").value = "";
+                fetchMessages();
+            });
+        });
+
+        document.getElementById("send-file-button").addEventListener("click", async () => {
+            const fileInput = document.getElementById("fileInput").files[0];
+            if (!fileInput) {
+                alert("ファイルを選択してください！");  
+                return;
+            }
+
+            const formData = new FormData();
+            formData.append("file", fileInput);
+            formData.append("username", username);
+            formData.append("room", currentRoom);
 
             try {
-                const response = await fetch("/delete-messages", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ room: currentRoom }) });
-
-                if (!response.ok) {
-                    console.error("削除エラー:", response.status);
-                    alert("メッセージ削除に失敗しました💥");
-                    return;
-                }
+                const response = await fetch("/upload", {
+                    method: "POST",
+                    body: formData
+                });
 
                 const result = await response.json();
-                document.getElementById("chat-box").innerHTML = ""; 
-                alert("すべてのメッセージを削除しました！🔥");
-
+                if (result.success) {
+                    fetchMessages();
+                } else {
+                    alert("ファイル送信に失敗しました！💥");
+                }
             } catch (error) {
-                console.error("削除エラー:", error);
-                alert("メッセージ削除中に問題が発生しました！💥");
+                console.error("ファイル送信エラー:", error);
+                alert("ファイル送信中に問題が発生しました！💥");
             }
         });
 
