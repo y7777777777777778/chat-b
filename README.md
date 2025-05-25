@@ -1,2 +1,2 @@
 # chat-app
-chat
+renderなどでデプロイするだけで使えます
