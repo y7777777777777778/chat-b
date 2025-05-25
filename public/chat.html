@@ -59,6 +59,11 @@
 
         async function fetchMessages() {
             const response = await fetch(`/messages?room=${currentRoom}`);
+            if (!response.ok) {
+                console.error("メッセージ取得エラー:", response.status);
+                return;
+            }
+
             const messages = await response.json();
             const chatBox = document.getElementById("chat-box");
             chatBox.innerHTML = ""; 
@@ -74,72 +79,45 @@
 
             if (fileUrl.match(/\.(png|jpg|jpeg|gif)$/)) {
                 return `<button onclick="showFile('${fileUrl}', 'image')">🔍 画像を表示</button>`;
+            } else if (fileUrl.match(/\.(mp4|webm)$/)) {
+                return `<button onclick="showFile('${fileUrl}', 'video')">▶ 動画を再生</button>`;
+            } else if (fileUrl.match(/\.(pdf|txt)$/)) {
+                return `<button onclick="showFile('${fileUrl}', 'document')">📄 ファイルを開く</button>`;
             } else {
                 return `<a href="${fileUrl}" target="_blank">📎 ファイルを開く</a>`;
             }
         }
 
-        document.getElementById("send-button").addEventListener("click", () => {
-            const message = document.getElementById("message-input").value;
-            if (!message.trim()) return;
-
-            fetch("/send-message", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ message, username, room: currentRoom })
-            }).then(() => {
-                document.getElementById("message-input").value = "";
-                fetchMessages();
-            });
-        });
-
-        document.getElementById("send-file-button").addEventListener("click", async () => {
-            const fileInput = document.getElementById("fileInput").files[0];
-            if (!fileInput) {
-                alert("ファイルを選択してください！");  
-                return;
+        function showFile(fileUrl, type) {
+            let content = "";
+            if (type === "image") {
+                content = `<img src="${fileUrl}" alt="拡大表示画像" style="max-width:90%; max-height:90%;">`;
+            } else if (type === "video") {
+                content = `<video src="${fileUrl}" controls autoplay style="max-width:90%; max-height:90%;"></video>`;
+            } else if (type === "document") {
+                content = `<iframe src="${fileUrl}" width="90%" height="90%"></iframe>`;
             }
 
-            const formData = new FormData();
-            formData.append("file", fileInput);
-            formData.append("username", username);
-            formData.append("room", currentRoom);
-
-            try {
-                const response = await fetch("/upload", {
-                    method: "POST",
-                    body: formData
-                });
-
-                const result = await response.json();
-                if (result.success) {
-                    fetchMessages();
-                } else {
-                    alert("ファイル送信に失敗しました！💥");
-                }
-            } catch (error) {
-                console.error("ファイル送信エラー:", error);
-                alert("ファイル送信中に問題が発生しました！💥");
-            }
-        });
+            document.getElementById("fileModalContent").innerHTML = content;
+            document.getElementById("fileModal").style.display = "block";
+        }
 
         document.getElementById("delete-button").addEventListener("click", async () => {
             if (!confirm("本当にすべてのメッセージを削除しますか？")) return;
 
             try {
-                const response = await fetch("/delete-messages", {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({ room: currentRoom })
-                });
+                const response = await fetch("/delete-messages", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ room: currentRoom }) });
+
+                if (!response.ok) {
+                    console.error("削除エラー:", response.status);
+                    alert("メッセージ削除に失敗しました💥");
+                    return;
+                }
 
                 const result = await response.json();
-                if (result.success) {
-                    document.getElementById("chat-box").innerHTML = ""; 
-                    alert("すべてのメッセージを削除しました！🔥");
-                } else {
-                    alert("メッセージ削除に失敗しました💥");
-                }
+                document.getElementById("chat-box").innerHTML = ""; 
+                alert("すべてのメッセージを削除しました！🔥");
+
             } catch (error) {
                 console.error("削除エラー:", error);
                 alert("メッセージ削除中に問題が発生しました！💥");
