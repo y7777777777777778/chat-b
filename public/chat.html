@@ -11,15 +11,14 @@
         #chat-box { border: 1px solid #ccc; padding: 10px; height: 300px; overflow-y: auto; text-align: left; }
         #message-input, #fileInput { width: 80%; }
         #send-button, #send-file-button { 
-            width: 120px; 
-            height: 40px; 
-            background-color: #0078D7; 
-            color: white; 
-            font-size: 16px; 
-            border: none; 
-            border-radius: 8px; 
-            cursor: pointer; 
-            transition: 0.3s; 
+            width: 18%;
+            background-color: #0078D7;
+            color: white;
+            font-size: 16px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: 0.3s;
         }
         #send-button:hover, #send-file-button:hover { background-color: #005A9E; }
         .room-container { margin: 20px 0; }
@@ -77,22 +76,27 @@
         }
 
         function createNewDM() {
-            const pastUsers = JSON.parse(localStorage.getItem("dmUsers")) || [];
-            if (pastUsers.length === 0) {
-                alert("まだDMしたユーザーがいません！");
-                return;
+            let dmUsers = JSON.parse(localStorage.getItem("dmUsers")) || [];
+            const newUser = prompt("DMするユーザー名を入力してください！");
+            if (!newUser) return;
+
+            if (!dmUsers.includes(newUser)) {
+                dmUsers.push(newUser);
+                localStorage.setItem("dmUsers", JSON.stringify(dmUsers));
             }
 
-            const userSelection = prompt("DMするユーザーを選択してください：" + pastUsers.join(", "));
-            if (!userSelection || !pastUsers.includes(userSelection)) return;
-
-            joinDM(userSelection);
+            joinDM(newUser);
         }
 
         function updateDMList() {
             let dmUsers = JSON.parse(localStorage.getItem("dmUsers")) || [];
             let dmList = document.getElementById("dm-list");
             dmList.innerHTML = "";
+
+            if (dmUsers.length === 0) {
+                dmList.innerHTML = "<p>まだDMしたユーザーがいません</p>";
+                return;
+            }
 
             dmUsers.forEach(user => {
                 let lastMessage = localStorage.getItem(`dm-${user}`) || "まだメッセージなし";
