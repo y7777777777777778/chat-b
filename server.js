@@ -1,3 +1,4 @@
+
 const fs = require("fs");
 const path = require("path");
 const express = require("express");
@@ -16,31 +17,26 @@ const MESSAGE_FILE = "messages.json";
 const PINNED_FILE = "pinnedMessages.json";
 const UPLOAD_DIR = "public/uploads";
 
-// **アップロードフォルダが存在しない場合、作成**
 if (!fs.existsSync(UPLOAD_DIR)) {
     fs.mkdirSync(UPLOAD_DIR, { recursive: true });
 }
 
-// **メッセージを保存**
 function saveMessage(data) {
     let messages = fs.existsSync(MESSAGE_FILE) ? JSON.parse(fs.readFileSync(MESSAGE_FILE, "utf-8")) : [];
     messages.push(data);
     fs.writeFileSync(MESSAGE_FILE, JSON.stringify(messages, null, 2));
 }
 
-// **ピン止めメッセージを保存**
 function savePinnedMessage(room, message) {
     let pinned = fs.existsSync(PINNED_FILE) ? JSON.parse(fs.readFileSync(PINNED_FILE, "utf-8")) : {};
     pinned[room] = message;
     fs.writeFileSync(PINNED_FILE, JSON.stringify(pinned, null, 2));
 }
 
-// **ルートアクセス時に `chat.html` を提供**
 app.get("/", (req, res) => {
     res.sendFile(path.join(__dirname, "public", "chat.html"));
 });
 
-// **メッセージ送信API**
 app.post("/send-message", (req, res) => {
     const { message, username, room } = req.body;
     if (!message) return res.status(400).json({ error: "Message cannot be empty!" });
@@ -52,7 +48,6 @@ app.post("/send-message", (req, res) => {
     res.status(200).json({ success: true });
 });
 
-// **ピン止めAPI**
 app.post("/pin-message", (req, res) => {
     const { message, room } = req.body;
     if (!message) return res.status(400).json({ error: "Pinned message cannot be empty!" });
@@ -63,7 +58,6 @@ app.post("/pin-message", (req, res) => {
     res.status(200).json({ success: true });
 });
 
-// **メッセージ取得API**
 app.get("/messages", (req, res) => {
     const { room } = req.query;
     if (!fs.existsSync(MESSAGE_FILE)) return res.json([]);
@@ -71,13 +65,11 @@ app.get("/messages", (req, res) => {
     res.json(messages.filter(m => m.room === room));
 });
 
-// **ピン止めメッセージ取得API**
 app.get("/pinned-messages", (req, res) => {
     if (!fs.existsSync(PINNED_FILE)) return res.json({});
     res.json(JSON.parse(fs.readFileSync(PINNED_FILE, "utf-8")));
 });
 
-// **ファイルアップロードAPI**
 app.post("/upload", (req, res) => {
     try {
         if (!req.files || !req.files.file) {
@@ -94,7 +86,13 @@ app.post("/upload", (req, res) => {
             }
 
             const fileUrl = `/uploads/${file.name}`;
-            const fileMessage = { user: req.body.username, file: fileUrl, room: req.body.room, timestamp: new Date().toISOString(), pinned: false };
+            const fileMessage = {
+                user: req.body.username,
+                file: fileUrl,
+                room: req.body.room,
+                timestamp: new Date().toISOString(),
+                pinned: false
+            };
             saveMessage(fileMessage);
             io.to(req.body.room).emit("message", fileMessage);
 
@@ -106,19 +104,38 @@ app.post("/upload", (req, res) => {
     }
 });
 
-// **Socket.IOの処理**
+const users = {}; // socket.id -> username
+
 io.on("connection", (socket) => {
+    socket.on("registerUser", (username) => {
+        users[socket.id] = username;
+        io.emit("userList", Object.values(users));
+    });
+
     socket.on("joinRoom", (room) => {
         socket.join(room);
-        const messages = fs.existsSync(MESSAGE_FILE) ? JSON.parse(fs.readFileSync(MESSAGE_FILE, "utf-8")) : [];
+
+        const messages = fs.existsSync(MESSAGE_FILE)
+            ? JSON.parse(fs.readFileSync(MESSAGE_FILE, "utf-8"))
+            : [];
         socket.emit("messageHistory", messages.filter(m => m.room === room));
 
-        const pinned = fs.existsSync(PINNED_FILE) ? JSON.parse(fs.readFileSync(PINNED_FILE, "utf-8")) : {};
+        const pinned = fs.existsSync(PINNED_FILE)
+            ? JSON.parse(fs.readFileSync(PINNED_FILE, "utf-8"))
+            : {};
         if (pinned[room]) socket.emit("updatePinnedMessage", { message: pinned[room] });
+    });
+
+    socket.on("requestUserList", () => {
+        socket.emit("userList", Object.values(users));
+    });
+
+    socket.on("disconnect", () => {
+        delete users[socket.id];
+        io.emit("userList", Object.values(users));
     });
 });
 
-// **サーバー起動**
 const PORT = 3000;
 server.listen(PORT, () => {
     console.log(`Server is running on http://localhost:${PORT}`);
