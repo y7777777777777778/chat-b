@@ -1,15 +1,39 @@
+
 <!DOCTYPE html>
 <html lang="ja">
 <head>
     <meta charset="UTF-8">
-    <title>停止</title>
+    <title>個別ログイン</title>
+    <script>
+        function login() {
+            const username = document.getElementById("username").value;
+            const password = document.getElementById("password").value;
 
+            const registeredUser = localStorage.getItem("registeredUser");
+            const registeredPassword = localStorage.getItem("registeredPassword");
 
-     
+            if (username === registeredUser && password === registeredPassword) {
+                localStorage.setItem("authenticated", "true");
+                localStorage.setItem("username", username);
+                window.location.href = "chat.html";
+            } else {
+                alert("ユーザー名またはパスワードが違います！");
+            }
+        }
 
+        function guestLogin() {
+            localStorage.setItem("authenticated", "true");
+            localStorage.setItem("username", "ゲスト");
+            window.location.href = "chat.html";
+        }
+    </script>
 </head>
 <body>
-
-<h1>chatアプデ中の為月曜日まで使えません</h1>
+    <h1>個別ログイン</h1>
+    <input type="text" id="username" placeholder="ユーザー名を入力" />
+    <input type="password" id="password" placeholder="パスワードを入力" />
+    <button onclick="login()">ログイン</button>
+    <p>アカウントがない方は <a href="register.html">新規登録</a> してください。</p>
+    <button onclick="guestLogin()">ゲストとして参加</button>
 </body>
 </html>
