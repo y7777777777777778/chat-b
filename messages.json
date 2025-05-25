@@ -1,20 +1,17 @@
 [
   {
-    "user": "gest",
-    "text": "送信テスト",
+    "user": "bot",
+    "text": "【自動メッセージ】この部屋は雑談部屋(1)です！下ネタ禁止です。OKは雑談部屋2です。",
     "room": "雑談部屋",
     "timestamp": "2025-05-22T18:50:00Z"
   },
-  {
-    "user": "gest",
-    "file": "/uploads/image123.jpg",
-    "room": "雑談部屋",
-    "timestamp": "2025-05-22T18:55:00Z"
+
+
   },
   {
-    "user": "Guest",
-    "text": "ファイル送信テスト",
-    "file": "/uploads/video456.mp4",
+    "user": "bot",
+    "text": "【自動メッセージ】この部屋は雑談部屋2です！下ネタOKです！禁止は雑談部屋です。",
+
     "room": "雑談部屋2",
     "timestamp": "2025-05-22T19:00:00Z"
   }
