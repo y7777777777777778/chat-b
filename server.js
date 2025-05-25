@@ -14,73 +14,125 @@ app.use(express.static("public"));
 app.use(fileUpload());
 
 const MESSAGE_FILE = "messages.json";
+const PINNED_FILE = "pinnedMessages.json";
 const UPLOAD_DIR = "public/uploads";
 
 if (!fs.existsSync(UPLOAD_DIR)) {
-  fs.mkdirSync(UPLOAD_DIR, { recursive: true });
+    fs.mkdirSync(UPLOAD_DIR, { recursive: true });
 }
 
 function saveMessage(data) {
-  const messages = fs.existsSync(MESSAGE_FILE) ? JSON.parse(fs.readFileSync(MESSAGE_FILE)) : [];
-  messages.push(data);
-  fs.writeFileSync(MESSAGE_FILE, JSON.stringify(messages, null, 2));
+    let messages = fs.existsSync(MESSAGE_FILE) ? JSON.parse(fs.readFileSync(MESSAGE_FILE, "utf-8")) : [];
+    messages.push(data);
+    fs.writeFileSync(MESSAGE_FILE, JSON.stringify(messages, null, 2));
+}
+
+function savePinnedMessage(room, message) {
+    let pinned = fs.existsSync(PINNED_FILE) ? JSON.parse(fs.readFileSync(PINNED_FILE, "utf-8")) : {};
+    pinned[room] = message;
+    fs.writeFileSync(PINNED_FILE, JSON.stringify(pinned, null, 2));
 }
 
 app.get("/", (req, res) => {
-  res.sendFile(path.join(__dirname, "public", "chat.html"));
-});
-
-app.get("/messages", (req, res) => {
-  const room = req.query.room;
-  const messages = fs.existsSync(MESSAGE_FILE) ? JSON.parse(fs.readFileSync(MESSAGE_FILE)) : [];
-  res.json(messages.filter(m => m.room === room));
+    res.sendFile(path.join(__dirname, "public", "chat.html"));
 });
 
 app.post("/send-message", (req, res) => {
-  const { message, username, room } = req.body;
-  const newMsg = { user: username, text: message, room, timestamp: new Date().toISOString() };
-  saveMessage(newMsg);
-  io.to(room).emit("message", newMsg);
-  res.json({ success: true });
+    const { message, username, room } = req.body;
+    if (!message) return res.status(400).json({ error: "Message cannot be empty!" });
+
+    const newMessage = { user: username, text: message, room, timestamp: new Date().toISOString(), pinned: false };
+    saveMessage(newMessage);
+    io.to(room).emit("message", newMessage);
+
+    res.status(200).json({ success: true });
+});
+
+app.post("/pin-message", (req, res) => {
+    const { message, room } = req.body;
+    if (!message) return res.status(400).json({ error: "Pinned message cannot be empty!" });
+
+    savePinnedMessage(room, message);
+    io.to(room).emit("updatePinnedMessage", { message });
+
+    res.status(200).json({ success: true });
+});
+
+app.get("/messages", (req, res) => {
+    const { room } = req.query;
+    if (!fs.existsSync(MESSAGE_FILE)) return res.json([]);
+    const messages = JSON.parse(fs.readFileSync(MESSAGE_FILE, "utf-8"));
+    res.json(messages.filter(m => m.room === room));
+});
+
+app.get("/pinned-messages", (req, res) => {
+    if (!fs.existsSync(PINNED_FILE)) return res.json({});
+    res.json(JSON.parse(fs.readFileSync(PINNED_FILE, "utf-8")));
 });
 
 app.post("/upload", (req, res) => {
-  if (!req.files || !req.files.file) return res.status(400).json({ error: "No file!" });
+    try {
+        if (!req.files || !req.files.file) {
+            return res.status(400).json({ error: "No file uploaded!" });
+        }
 
-  const file = req.files.file;
-  const filePath = `${UPLOAD_DIR}/${file.name}`;
-  file.mv(filePath, (err) => {
-    if (err) return res.status(500).json({ error: err.message });
+        const file = req.files.file;
+        const filePath = `${UPLOAD_DIR}/${file.name}`;
 
-    const fileUrl = `/uploads/${file.name}`;
-    const newMsg = { user: req.body.username, file: fileUrl, room: req.body.room, timestamp: new Date().toISOString() };
-    saveMessage(newMsg);
-    io.to(req.body.room).emit("message", newMsg);
-    res.json({ success: true, fileUrl });
-  });
+        file.mv(filePath, (err) => {
+            if (err) {
+                console.error("File upload error:", err);
+                return res.status(500).json({ error: err.message });
+            }
+
+            const fileUrl = `/uploads/${file.name}`;
+            const fileMessage = { user: req.body.username, file: fileUrl, room: req.body.room, timestamp: new Date().toISOString(), pinned: false };
+            saveMessage(fileMessage);
+            io.to(req.body.room).emit("message", fileMessage);
+
+            res.json({ success: true, fileUrl });
+        });
+    } catch (error) {
+        console.error("Unexpected error in upload:", error);
+        res.status(500).json({ error: "Internal Server Error" });
+    }
 });
 
-// ユーザー管理
-const users = {}; // socket.id => username
+// 🔽 ユーザー接続管理
+let connectedUsers = {};
 
 io.on("connection", (socket) => {
-  socket.on("registerUser", (username) => {
-    users[socket.id] = username;
-    io.emit("userList", Object.values(users));
-  });
+    socket.on("joinRoom", ({ room, username }) => {
+        socket.join(room);
+        connectedUsers[socket.id] = { username, room };
 
-  socket.on("requestUserList", () => {
-    socket.emit("userList", Object.values(users));
-  });
+        const messages = fs.existsSync(MESSAGE_FILE) ? JSON.parse(fs.readFileSync(MESSAGE_FILE, "utf-8")) : [];
+        socket.emit("messageHistory", messages.filter(m => m.room === room));
 
-  socket.on("disconnect", () => {
-    delete users[socket.id];
-    io.emit("userList", Object.values(users));
-  });
+        const pinned = fs.existsSync(PINNED_FILE) ? JSON.parse(fs.readFileSync(PINNED_FILE, "utf-8")) : {};
+        if (pinned[room]) socket.emit("updatePinnedMessage", { message: pinned[room] });
 
-  socket.on("joinRoom", (room) => {
-    socket.join(room);
-  });
+        sendUserList(room);
+    });
+
+    socket.on("disconnect", () => {
+        const user = connectedUsers[socket.id];
+        if (user) {
+            const { room } = user;
+            delete connectedUsers[socket.id];
+            sendUserList(room);
+        }
+    });
+
+    function sendUserList(room) {
+        const users = Object.values(connectedUsers)
+            .filter(u => u.room === room)
+            .map(u => u.username);
+        io.to(room).emit("userList", users);
+    }
 });
 
-server.listen(3000, () => console.log("http://localhost:3000"));
+const PORT = 3000;
+server.listen(PORT, () => {
+    console.log(`Server is running on http://localhost:${PORT}`);
+});
