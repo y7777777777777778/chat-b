@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="ja">
 <head>
@@ -27,7 +28,7 @@
         <div class="room-button" onclick="joinRoom('雑談部屋')">雑談部屋</div>
         <div class="room-button" onclick="joinRoom('雑談部屋2')">雑談部屋2</div>
     </div>
-　　<p>メッセージが読み込まれない時はもう一度入っている部屋を押してください</p>
+    <p>メッセージが読み込まれない時はもう一度入っている部屋を押してください</p>
     <h2>チャットルーム: <span id="roomTitle">雑談部屋</span></h2>
     <div id="chat-box"></div>
 
@@ -58,20 +59,26 @@
             fetchMessages();
         }
 
+        function addMessageToChatBox(msg) {
+            const chatBox = document.getElementById("chat-box");
+            let displayMsg = msg.text ? msg.text : getFilePreview(msg.file);
+            chatBox.innerHTML += `<p><strong>${msg.user}:</strong> ${displayMsg}</p>`;
+            chatBox.scrollTop = chatBox.scrollHeight;  // 自動スクロール
+        }
+
         async function fetchMessages() {
             const response = await fetch(`/messages?room=${currentRoom}`);
             const messages = await response.json();
             const chatBox = document.getElementById("chat-box");
-            chatBox.innerHTML = ""; 
+            chatBox.innerHTML = "";
 
             messages.forEach(msg => {
-                let displayMsg = msg.text ? msg.text : getFilePreview(msg.file);
-                chatBox.innerHTML += `<p><strong>${msg.user}:</strong> ${displayMsg}</p>`;
+                addMessageToChatBox(msg);
             });
         }
 
         function getFilePreview(fileUrl) {
-            if (!fileUrl) return ""; 
+            if (!fileUrl) return "";
 
             if (fileUrl.match(/\.(png|jpg|jpeg|gif)$/)) {
                 return `<button onclick="showFile('${fileUrl}', 'image')">🔍 画像を表示</button>`;
@@ -102,6 +109,13 @@
             document.getElementById("fileModal").style.display = "none";
         }
 
+        // Socket.IOでリアルタイムメッセージ受信
+        socket.on("message", (msg) => {
+            if (msg.room === currentRoom) {
+                addMessageToChatBox(msg);
+            }
+        });
+
         document.getElementById("send-button").addEventListener("click", () => {
             const message = document.getElementById("message-input").value;
             if (!message.trim()) return;
@@ -112,14 +126,14 @@
                 body: JSON.stringify({ message, username, room: currentRoom })
             }).then(() => {
                 document.getElementById("message-input").value = "";
-                fetchMessages();
+                // fetchMessages();  ← リアルタイム受信でカバーできるのでコメントアウトしてもOK
             });
         });
 
         document.getElementById("send-file-button").addEventListener("click", async () => {
             const fileInput = document.getElementById("fileInput").files[0];
             if (!fileInput) {
-                alert("ファイルを選択してください！");  
+                alert("ファイルを選択してください！");
                 return;
             }
 
@@ -136,7 +150,7 @@
 
                 const result = await response.json();
                 if (result.success) {
-                    fetchMessages();
+                    // fetchMessages(); ← これもリアルタイムで表示されるので不要
                 } else {
                     alert("ファイル送信に失敗しました！💥");
                 }
