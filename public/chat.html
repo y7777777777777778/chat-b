@@ -1,184 +1,231 @@
+
 <!DOCTYPE html>
 <html lang="ja">
 <head>
     <meta charset="UTF-8" />
-    <title>チャットルーム</title>
+    <title>インスタ風チャットルーム</title>
     <script src="/socket.io/socket.io.js"></script>
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP&family=Roboto&display=swap" rel="stylesheet" />
+    <link href="https://fonts.googleapis.com/css2?family=Poppins&display=swap" rel="stylesheet" />
     <style>
+        /* ベース設定 */
         body {
-            font-family: 'Noto Sans JP', 'Roboto', sans-serif;
-            background-color: #f0f4f8;
+            font-family: 'Poppins', sans-serif;
+            background: linear-gradient(135deg, #fdfbfb 0%, #ebedee 100%);
             margin: 0;
             padding: 0 1rem;
             display: flex;
             flex-direction: column;
             align-items: center;
             min-height: 100vh;
-            color: #333;
+            color: #262626;
         }
 
         h1 {
             margin-top: 2rem;
-            color: #2c3e50;
-            font-weight: 700;
+            font-weight: 600;
+            font-size: 1.8rem;
+            letter-spacing: 0.05em;
+            color: #262626;
+            user-select: none;
         }
 
         #usernameDisplay {
-            margin-bottom: 1rem;
-            font-weight: 600;
-            color: #34495e;
+            margin: 0.5rem 0 1rem 0;
+            font-size: 0.9rem;
+            color: #999;
+            font-weight: 500;
         }
 
         .room-container {
             margin: 1rem 0;
+            display: flex;
+            gap: 1rem;
         }
 
         .room-button {
-            display: inline-block;
-            width: 130px;
-            height: 42px;
-            line-height: 42px;
-            border: 2px solid #2980b9;
-            cursor: pointer;
-            margin: 0 0.5rem;
-            border-radius: 22px;
-            color: #2980b9;
+            padding: 10px 24px;
+            border-radius: 9999px;
+            background: linear-gradient(45deg, #f09433, #e6683c, #dc2743, #cc2366, #bc1888);
+            color: white;
             font-weight: 600;
-            background-color: #fff;
-            transition: background-color 0.3s ease, color 0.3s ease, transform 0.2s ease;
-            box-shadow: 0 3px 6px rgba(41, 128, 185, 0.2);
+            cursor: pointer;
             user-select: none;
+            box-shadow: 0 4px 10px rgba(220,35,67,0.3);
+            transition: box-shadow 0.3s ease;
+            border: none;
         }
-
         .room-button:hover {
-            background-color: #2980b9;
-            color: #fff;
-            transform: scale(1.08);
-            box-shadow: 0 6px 12px rgba(41, 128, 185, 0.4);
+            box-shadow: 0 6px 20px rgba(220,35,67,0.5);
         }
 
         p.info {
-            font-size: 0.9rem;
-            color: #666;
+            font-size: 0.8rem;
+            color: #bbb;
             margin-bottom: 1rem;
+            user-select: none;
         }
 
         h2 {
-            color: #34495e;
-            margin-bottom: 0.5rem;
-            font-weight: 700;
+            font-weight: 600;
+            color: #262626;
+            margin-bottom: 0.6rem;
         }
 
         #roomTitle {
-            color: #2980b9;
+            color: #bc1888;
+            user-select: none;
         }
 
         #chat-box {
             width: 100%;
-            max-width: 700px;
-            height: 350px;
-            border-radius: 12px;
-            background-color: #fff;
-            box-shadow: 0 4px 8px rgba(0,0,0,0.1);
-            padding: 15px;
+            max-width: 600px;
+            height: 380px;
+            border-radius: 20px;
+            background: white;
+            box-shadow: 0 6px 18px rgba(0,0,0,0.1);
+            padding: 20px;
             overflow-y: auto;
-            margin-bottom: 1rem;
+            margin-bottom: 1.5rem;
             display: flex;
             flex-direction: column;
+            scrollbar-width: thin;
+            scrollbar-color: #bc1888 #f0f0f0;
+        }
+        #chat-box::-webkit-scrollbar {
+            width: 6px;
+        }
+        #chat-box::-webkit-scrollbar-thumb {
+            background: #bc1888;
+            border-radius: 10px;
+        }
+        #chat-box::-webkit-scrollbar-track {
+            background: #f0f0f0;
         }
 
         /* メッセージ吹き出し */
         .message {
             max-width: 70%;
-            padding: 10px 15px;
-            margin: 5px 0;
-            border-radius: 20px;
-            font-size: 0.95rem;
-            line-height: 1.3;
+            padding: 14px 18px;
+            margin: 6px 0;
+            border-radius: 25px;
+            font-size: 1rem;
+            line-height: 1.4;
             word-break: break-word;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+            position: relative;
+            transition: background 0.3s ease;
         }
 
-        /* 自分のメッセージ */
+        /* 自分のメッセージ（右寄せ） */
         .message.self {
-            background-color: #2980b9;
-            color: #fff;
+            background: linear-gradient(135deg, #f09433, #bc1888);
+            color: white;
             align-self: flex-end;
-            border-bottom-right-radius: 4px;
+            border-bottom-right-radius: 6px;
+        }
+        .message.self::after {
+            content: "";
+            position: absolute;
+            bottom: 0;
+            right: -12px;
+            width: 0; height: 0;
+            border-top: 12px solid transparent;
+            border-left: 12px solid #bc1888;
+            border-bottom: 0;
+            filter: drop-shadow(0 1px 1px rgba(0,0,0,0.1));
         }
 
-        /* 他人のメッセージ */
+        /* 他人のメッセージ（左寄せ） */
         .message.other {
-            background-color: #ecf0f1;
-            color: #2c3e50;
+            background: #fafafa;
+            color: #262626;
             align-self: flex-start;
-            border-bottom-left-radius: 4px;
+            border-bottom-left-radius: 6px;
+        }
+        .message.other::after {
+            content: "";
+            position: absolute;
+            bottom: 0;
+            left: -12px;
+            width: 0; height: 0;
+            border-top: 12px solid transparent;
+            border-right: 12px solid #fafafa;
+            border-bottom: 0;
+            filter: drop-shadow(0 1px 1px rgba(0,0,0,0.05));
         }
 
         .message strong {
             font-weight: 700;
             display: block;
-            margin-bottom: 5px;
+            margin-bottom: 6px;
             font-size: 0.85rem;
             opacity: 0.75;
+            user-select: text;
         }
 
         #input-area {
             display: flex;
-            max-width: 700px;
+            max-width: 600px;
             width: 100%;
-            gap: 0.5rem;
-            margin-bottom: 1rem;
+            gap: 0.8rem;
+            margin-bottom: 1.5rem;
             align-items: center;
         }
 
         #message-input {
             flex-grow: 1;
-            padding: 12px 15px;
+            padding: 14px 20px;
             font-size: 1rem;
-            border-radius: 25px;
-            border: 2px solid #2980b9;
+            border-radius: 50px;
+            border: 2px solid #bc1888;
             outline: none;
-            transition: border-color 0.3s ease;
+            transition: border-color 0.3s ease, box-shadow 0.3s ease;
+            color: #262626;
+            user-select: text;
+        }
+
+        #message-input::placeholder {
+            color: #bbb;
         }
 
         #message-input:focus {
-            border-color: #3498db;
-            box-shadow: 0 0 5px rgba(52, 152, 219, 0.6);
+            border-color: #f09433;
+            box-shadow: 0 0 8px rgba(240,148,51,0.5);
         }
 
         button {
-            background-color: #2980b9;
+            background: linear-gradient(45deg, #f09433, #bc1888);
             color: white;
             border: none;
-            border-radius: 25px;
-            padding: 12px 20px;
+            border-radius: 50px;
+            padding: 14px 26px;
             cursor: pointer;
-            font-weight: 600;
-            box-shadow: 0 3px 6px rgba(41, 128, 185, 0.4);
-            transition: background-color 0.3s ease, box-shadow 0.3s ease;
+            font-weight: 700;
+            box-shadow: 0 4px 14px rgba(220,35,67,0.7);
+            transition: box-shadow 0.3s ease;
             user-select: none;
+            white-space: nowrap;
         }
 
         button:hover {
-            background-color: #3498db;
-            box-shadow: 0 5px 12px rgba(52, 152, 219, 0.6);
+            box-shadow: 0 6px 24px rgba(220,35,67,1);
         }
 
         #fileInput {
             flex-grow: 0;
-            padding: 5px;
-            border-radius: 25px;
-            border: 2px solid #2980b9;
+            padding: 8px 14px;
+            border-radius: 50px;
+            border: 2px solid #bc1888;
             cursor: pointer;
             font-size: 0.9rem;
-            background-color: white;
+            background: white;
+            color: #262626;
+            user-select: none;
         }
 
         #send-file-button {
-            min-width: 100px;
+            min-width: 110px;
         }
 
         /* ファイルモーダル */
@@ -198,7 +245,7 @@
         #fileModalContent {
             max-width: 90%;
             max-height: 90%;
-            border-radius: 12px;
+            border-radius: 20px;
             overflow: auto;
             box-shadow: 0 0 15px rgba(255,255,255,0.5);
             background: white;
@@ -206,7 +253,7 @@
 
         .close-button {
             position: fixed;
-            top: 20px; right: 20px;
+            top: 24px; right: 24px;
             background: #e74c3c;
             color: white;
             border: none;
@@ -216,7 +263,7 @@
             font-weight: 700;
             font-size: 18px;
             cursor: pointer;
-            box-shadow: 0 3px 6px rgba(231, 76, 60, 0.7);
+            box-shadow: 0 4px 10px rgba(231,76,60,0.7);
             transition: background-color 0.3s ease;
             user-select: none;
         }
@@ -228,33 +275,38 @@
         /* レスポンシブ */
         @media (max-width: 600px) {
             #chat-box {
-                height: 250px;
+                height: 280px;
             }
             .room-button {
-                width: 100px;
-                height: 36px;
-                line-height: 36px;
-                margin: 0 0.3rem;
+                padding: 8px 16px;
+                font-size: 0.9rem;
             }
             #send-file-button {
-                min-width: 80px;
-                padding: 10px 14px;
+                min-width: 90px;
+                padding: 12px 18px;
                 font-size: 0.9rem;
+            }
+            #message-input {
+                padding: 12px 16px;
+                font-size: 0.95rem;
             }
         }
     </style>
 </head>
 <body>
-    <h1>チャットルーム</h1>
+    <h1>インスタ風チャットルーム</h1>
     <p id="usernameDisplay"></p>
 
-    <h2>入りたい部屋をクリックしてください</h2>
+    <h2>入りたい部屋を選択してください</h2>
     <div class="room-container">
-        <div class="room-button" onclick="joinRoom('雑談部屋')">雑談部屋</div>
-        <div class="room-button" onclick="joinRoom('雑談部屋2')">雑談部屋2</div>
+        <button class="room-button" onclick="joinRoom('雑談部屋')">雑談部屋</button>
+        <button class="room-button" onclick="joinRoom('雑談部屋2')">雑談部屋2</button>
     </div>
-    <p class="info">メッセージが読み込まれない時はもう一度入っている部屋を押してください</p>
+
+    <p class="info">メッセージが読み込まれない場合は、もう一度部屋を押してください</p>
+
     <h2>チャットルーム: <span id="roomTitle">雑談部屋</span></h2>
+
     <div id="chat-box"></div>
 
     <div id="input-area">
@@ -262,12 +314,11 @@
         <button id="send-button">送信</button>
     </div>
 
-    <div id="input-area" style="gap:0.8rem;">
+    <div id="input-area" style="gap:1rem;">
         <input type="file" id="fileInput" />
         <button id="send-file-button">ファイル送信</button>
     </div>
 
-    <!-- ファイル拡大表示用モーダル -->
     <div id="fileModal">
         <div id="fileModalContent"></div>
         <button class="close-button" onclick="closeModal()">×</button>
@@ -298,7 +349,7 @@
             div.innerHTML = `<strong>${msg.user}</strong> ${displayMsg}`;
 
             chatBox.appendChild(div);
-            chatBox.scrollTop = chatBox.scrollHeight; // 自動スクロール
+            chatBox.scrollTop = chatBox.scrollHeight;
         }
 
         async function fetchMessages() {
@@ -316,24 +367,24 @@
             if (!fileUrl) return "";
 
             if (fileUrl.match(/\.(png|jpg|jpeg|gif)$/)) {
-                return `<button onclick="showFile('${fileUrl}', 'image')" style="border:none; background:none; color:#2980b9; cursor:pointer;">🔍 画像を表示</button>`;
+                return `<button onclick="showFile('${fileUrl}', 'image')" style="border:none; background:none; color:#bc1888; cursor:pointer;">🔍 画像を見る</button>`;
             } else if (fileUrl.match(/\.(mp4|webm)$/)) {
-                return `<button onclick="showFile('${fileUrl}', 'video')" style="border:none; background:none; color:#2980b9; cursor:pointer;">▶ 動画を再生</button>`;
+                return `<button onclick="showFile('${fileUrl}', 'video')" style="border:none; background:none; color:#bc1888; cursor:pointer;">▶ 動画を見る</button>`;
             } else if (fileUrl.match(/\.(pdf|txt)$/)) {
-                return `<button onclick="showFile('${fileUrl}', 'document')" style="border:none; background:none; color:#2980b9; cursor:pointer;">📄 ファイルを開く</button>`;
+                return `<button onclick="showFile('${fileUrl}', 'document')" style="border:none; background:none; color:#bc1888; cursor:pointer;">📄 ファイルを見る</button>`;
             } else {
-                return `<a href="${fileUrl}" target="_blank" style="color:#2980b9; text-decoration:none;">📎 ファイルを開く</a>`;
+                return `<a href="${fileUrl}" target="_blank" style="color:#bc1888; text-decoration:none;">📎 ファイルを開く</a>`;
             }
         }
 
         function showFile(fileUrl, type) {
             let content = "";
             if (type === "image") {
-                content = `<img src="${fileUrl}" alt="拡大画像" style="max-width:90vw; max-height:90vh; border-radius:12px;">`;
+                content = `<img src="${fileUrl}" alt="拡大画像" style="max-width:90vw; max-height:90vh; border-radius:15px;">`;
             } else if (type === "video") {
-                content = `<video src="${fileUrl}" controls autoplay style="max-width:90vw; max-height:90vh; border-radius:12px;"></video>`;
+                content = `<video src="${fileUrl}" controls autoplay style="max-width:90vw; max-height:90vh; border-radius:15px;"></video>`;
             } else if (type === "document") {
-                content = `<iframe src="${fileUrl}" width="90vw" height="90vh" style="border:none; border-radius:12px;"></iframe>`;
+                content = `<iframe src="${fileUrl}" width="90vw" height="90vh" style="border:none; border-radius:15px;"></iframe>`;
             }
 
             document.getElementById("fileModalContent").innerHTML = content;
@@ -344,7 +395,6 @@
             document.getElementById("fileModal").style.display = "none";
         }
 
-        // Socket.IOでリアルタイムメッセージ受信
         socket.on("message", (msg) => {
             if (msg.room === currentRoom) {
                 addMessageToChatBox(msg);
@@ -358,7 +408,7 @@
             fetch("/send-message", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ message, username, room: currentRoom })
+                body: JSON.stringify({ message, username, room: currentRoom }),
             }).then(() => {
                 document.getElementById("message-input").value = "";
             });
@@ -379,9 +429,8 @@
             try {
                 const response = await fetch("/upload", {
                     method: "POST",
-                    body: formData
+                    body: formData,
                 });
-
                 const result = await response.json();
                 if (!result.success) {
                     alert("ファイル送信に失敗しました！💥");
