@@ -29,6 +29,6 @@
     "url": "https://github.com/y7777777777777778/chat-app.git"
   },
   "keywords": ["chat", "realtime", "socket.io", "express"],
-  "author": "Yoshimasa Furukawa",
+  
   "license": "MIT"
 }
