@@ -75,9 +75,11 @@ const sessionMiddleware = session({
     cookie: {
         maxAge: 1000 * 60 * 60 * 24,
         httpOnly: true,
-        secure: process.env.NODE_ENV === 'production',
-        sameSite: 'Lax'
-    }
+        // **ここを修正・確認**
+        secure: true, // HTTPS経由でのみクッキーを送信
+        sameSite: 'None' // クロスサイトリクエストでクッキーを送信
+    },
+    proxy: true // Renderのようなプロキシサーバーの背後で動作する場合に必要
 });
 app.use(sessionMiddleware);
 
@@ -216,6 +218,11 @@ app.post("/logout", (req, res) => {
 
 // 現在の認証状態とユーザー名を取得するエンドポイント
 app.get("/check-auth", (req, res) => {
+    // キャッシュを強制的に無効化するヘッダーを追加
+    res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+    res.setHeader('Pragma', 'no-cache');
+    res.setHeader('Expires', '0');
+
     if (req.session.isAuthenticated && req.session.username) {
         res.json({ authenticated: true, username: req.session.username });
     } else {
@@ -302,7 +309,7 @@ io.on("connection", (socket) => {
     } else {
         console.warn("Unauthenticated Socket.IO connection attempt. Disconnecting.");
         socket.emit("redirect", "/index.html"); // クライアントにリダイレクトを指示
-        socket.disconnect(true);
+        socket.disconnect(true); // 元に戻す
         return;
     }
 
