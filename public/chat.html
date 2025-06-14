@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="ja">
 <head>
@@ -29,7 +30,7 @@
     button:hover { background-color: #0056b3; }
     .file-message img, .file-message video { max-width: 100%; height: auto; border-radius: 5px; margin-top: 5px; }
     .pinned-message { background-color: #fffacd; padding: 8px; border-left: 5px solid #ffcc00; margin-bottom: 10px; border-radius: 4px; font-size: 0.9em; position: relative; }
-    .pinned-message button { position: absolute; top: 5px; right: 5px; padding: 3px 8px; background-color: #f0ad4e; font-size: 0.7em; }
+    .pinned-message button { position: absolute; top: 5px; right: 5px; padding: 3px 8px; background-size: 0.7em; }
     #logout-button {
       background-color: #dc3545;
       margin-left: auto;
@@ -187,7 +188,7 @@
     // 認証されていない場合にリダイレクトするイベント
     socket.on("redirect", (url) => {
         alert("認証が必要です。ログインページにリダイレクトします。");
-        window.location.href = url + "?redirected=true"; // リダイレクトフラグを追加
+        window.location.href = url + "?redirected=true";
     });
 
     socket.on("updatePinnedMessage", (data) => {
@@ -233,7 +234,7 @@
         const response = await fetch("/send-message", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ message, room: currentRoom }), // usernameはサーバー側でセッションから取得
+          body: JSON.stringify({ message, room: currentRoom }),
         });
         const result = await response.json();
         if (!result.success) {
@@ -257,7 +258,7 @@
 
       const formData = new FormData();
       formData.append("file", fileInput);
-      formData.append("room", currentRoom); // usernameはサーバー側でセッションから取得
+      formData.append("room", currentRoom);
 
       try {
         const response = await fetch("/upload", {
