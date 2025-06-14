@@ -7,14 +7,15 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <link href="https://fonts.googleapis.com/css2?family=Poppins&display=swap" rel="stylesheet" />
   <style>
+    /* 基本スタイル */
     * { box-sizing: border-box; }
-    body { font-family: "Poppins", sans-serif; margin: 0; background-color: #fafafa; color: #262626; }
-    h1, h2 { text-align: center; color: #262626; }
+    body { font-family: "Poppins", sans-serif; margin: 0; background-color: #fafafa; color: #262626; transition: background-color 0.3s, color 0.3s; }
+    h1, h2 { text-align: center; color: #262626; transition: color 0.3s; }
     #usernameDisplay { text-align: center; margin-bottom: 10px; font-weight: bold; }
     .room-container { display: flex; justify-content: center; gap: 1rem; margin-bottom: 20px; flex-wrap: wrap; }
     .room-button { padding: 10px 20px; font-size: 16px; background-color: #3897f0; color: white; border: none; border-radius: 5px; cursor: pointer; transition: background-color 0.2s ease; }
     .room-button.active { background-color: #0056b3; }
-    #chat-box { border: 1px solid #ddd; padding: 15px; height: 400px; overflow-y: scroll; margin-bottom: 10px; background-color: #fff; border-radius: 8px; }
+    #chat-box { border: 1px solid #ddd; padding: 15px; height: 400px; overflow-y: scroll; margin-bottom: 10px; background-color: #fff; border-radius: 8px; transition: background-color 0.3s, border-color 0.3s; }
     .message { margin-bottom: 10px; padding: 8px 12px; border-radius: 18px; line-height: 1.4; display: inline-block; max-width: 80%; word-wrap: break-word; }
     .message.sent { background-color: #e0f2fe; color: #000; float: right; border-bottom-right-radius: 4px; }
     .message.received { background-color: #f2f2f2; color: #000; float: left; border-bottom-left-radius: 4px; }
@@ -23,19 +24,155 @@
     .timestamp { font-size: 0.7em; color: #aaa; }
     .message-container { clear: both; overflow: hidden; margin-bottom: 10px; }
     .message-content { display: flex; flex-direction: column; }
-    .message-input-area { display: flex; gap: 10px; margin-top: 20px; padding: 10px; border-top: 1px solid #eee; background-color: #fff; }
-    #message-input { flex-grow: 1; padding: 10px; border: 1px solid #ddd; border-radius: 5px; }
+    .message-input-area { display: flex; gap: 10px; margin-top: 20px; padding: 10px; border-top: 1px solid #eee; background-color: #fff; transition: background-color 0.3s, border-color 0.3s; }
+    #message-input { flex-grow: 1; padding: 10px; border: 1px solid #ddd; border-radius: 5px; background-color: #fff; color: #262626; transition: background-color 0.3s, color 0.3s, border-color 0.3s; }
     button { padding: 10px 15px; background-color: #3897f0; color: white; border: none; border-radius: 5px; cursor: pointer; transition: background-color 0.2s ease; }
     button:hover { background-color: #0056b3; }
     .file-message img, .file-message video { max-width: 100%; height: auto; border-radius: 5px; margin-top: 5px; }
-    .pinned-message { background-color: #fffacd; padding: 8px; border-left: 5px solid #ffcc00; margin-bottom: 10px; border-radius: 4px; font-size: 0.9em; position: relative; }
+    .pinned-message { background-color: #fffacd; padding: 8px; border-left: 5px solid #ffcc00; margin-bottom: 10px; border-radius: 4px; font-size: 0.9em; position: relative; transition: background-color 0.3s; }
     .pinned-message button { position: absolute; top: 5px; right: 5px; padding: 3px 8px; background-size: 0.7em; }
-    #logout-button {
-      background-color: #dc3545;
-      margin-left: auto;
+    #logout-button { background-color: #dc3545; }
+    #logout-button:hover { background-color: #c82333; }
+    #settings-button { background-color: #6c757d; }
+    #settings-button:hover { background-color: #5a6268; }
+
+    /* モーダルウィンドウのスタイル */
+    .modal {
+        display: none;
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background-color: rgba(0, 0, 0, 0.5);
+        z-index: 1000;
+        overflow-y: auto;
     }
-    #logout-button:hover {
-      background-color: #c82333;
+    .modal-content {
+        background-color: #fefefe;
+        margin: 10% auto; /* 画面中央に近づける */
+        padding: 20px;
+        border: 1px solid #888;
+        width: 90%; /* スマホ対応 */
+        max-width: 500px;
+        border-radius: 8px;
+        position: relative;
+        box-shadow: 0 4px 10px rgba(0,0,0,0.2);
+        transition: background-color 0.3s, border-color 0.3s;
+    }
+    .modal-content h2 {
+      margin-top: 0;
+      text-align: left;
+    }
+    .close {
+        position: absolute;
+        top: 10px;
+        right: 15px;
+        color: #aaa;
+        font-size: 32px;
+        font-weight: bold;
+        cursor: pointer;
+    }
+    .close:hover, .close:focus {
+        color: #000;
+        text-decoration: none;
+    }
+    .setting-item {
+        margin-bottom: 20px;
+        padding-bottom: 15px;
+        border-bottom: 1px solid #eee;
+    }
+    .setting-item:last-child {
+        border-bottom: none;
+    }
+    .setting-item label {
+        display: block;
+        margin-bottom: 8px;
+        font-weight: bold;
+    }
+    .setting-item input[type="text"], .setting-item input[type="password"] {
+        width: calc(100% - 22px); /* paddingとborderを考慮 */
+        padding: 10px;
+        margin-right: 10px;
+        border: 1px solid #ddd;
+        border-radius: 4px;
+        background-color: #fff; /* ライトモード時の背景色 */
+        color: #262626; /* ライトモード時の文字色 */
+        transition: background-color 0.3s, color 0.3s, border-color 0.3s;
+    }
+    .setting-item button {
+        padding: 8px 12px;
+        font-size: 0.9em;
+        margin-top: 5px; /* 上の要素との間隔 */
+        width: auto; /* 幅を自動調整 */
+        display: inline-block; /* 横並びにするため */
+        margin-right: 10px; /* ボタン間のスペース */
+    }
+    .setting-item button.danger {
+        background-color: #dc3545;
+    }
+    .setting-item button.danger:hover {
+        background-color: #c82333;
+    }
+    .setting-item button.secondary {
+        background-color: #6c757d;
+    }
+    .setting-item button.secondary:hover {
+        background-color: #5a6268;
+    }
+
+    /* ダークモードのスタイル */
+    body.dark-mode {
+        background-color: #222;
+        color: #eee;
+    }
+    body.dark-mode h1, body.dark-mode h2 {
+        color: #eee;
+    }
+    body.dark-mode #chat-box {
+        background-color: #333;
+        border-color: #555;
+    }
+    body.dark-mode .message.sent {
+        background-color: #004d40; /* ダークモードでの送信メッセージ */
+        color: #fff;
+    }
+    body.dark-mode .message.received {
+        background-color: #555; /* ダークモードでの受信メッセージ */
+        color: #eee;
+    }
+    body.dark-mode .message-input-area {
+        background-color: #333;
+        border-color: #555;
+    }
+    body.dark-mode #message-input {
+        background-color: #444;
+        color: #eee;
+        border-color: #666;
+    }
+    body.dark-mode .pinned-message {
+        background-color: #443e2b; /* ダークモードでのピン留め */
+        border-left-color: #ffcc00;
+        color: #eee;
+    }
+    body.dark-mode .modal-content {
+        background-color: #333;
+        border-color: #555;
+        color: #eee;
+    }
+    body.dark-mode .setting-item {
+        border-bottom-color: #444;
+    }
+    body.dark-mode .setting-item input {
+        background-color: #444;
+        color: #eee;
+        border-color: #666;
+    }
+    body.dark-mode .close {
+        color: #bbb;
+    }
+    body.dark-mode .close:hover, body.dark-mode .close:focus {
+        color: #fff;
     }
   </style>
 </head>
@@ -57,7 +194,34 @@
     <button id="send-button">送信</button>
     <input type="file" id="fileInput" />
     <button id="send-file-button">ファイル送信</button>
+    <button id="settings-button">設定</button>  
     <button id="logout-button">ログアウト</button>
+  </div>
+
+  <div id="settingsModal" class="modal">
+      <div class="modal-content">
+        <span class="close" onclick="closeSettingsModal()">&times;</span>
+        <h2>設定</h2>
+        
+        <div class="setting-item">
+          <h3>テーマ</h3>
+          <button onclick="setTheme('light')">ライトモード</button>
+          <button onclick="setTheme('dark')">ダークモード</button>
+        </div>
+
+        <div class="setting-item">
+          <h3>ユーザー名変更</h3>
+          <input type="text" id="newUsernameInput" placeholder="新しいユーザー名" />
+          <button onclick="changeUsername()">変更</button>
+        </div>
+
+        <div class="setting-item">
+          <h3>アカウント</h3>
+          <button class="danger" onclick="confirmLogout()">ログアウト</button>
+        </div>
+
+        <button onclick="closeSettingsModal()" class="secondary">戻る</button>
+      </div>
   </div>
 
   <script>
@@ -67,8 +231,17 @@
 
     // ページロード時に認証状態をチェックし、ユーザー名を取得
     window.onload = async () => {
+      // 保存されたテーマを適用
+      const savedTheme = localStorage.getItem('theme');
+      if (savedTheme) {
+        document.body.classList.add(savedTheme + '-mode');
+      } else {
+        // デフォルトはライトモード
+        document.body.classList.add('light-mode');
+      }
+
       try {
-        // **キャッシュを無効化するクエリパラメータを追加**
+        // キャッシュを無効化するクエリパラメータを追加
         const response = await fetch(`/check-auth?t=${new Date().getTime()}`);
         const result = await response.json();
         if (result.authenticated) {
@@ -96,13 +269,11 @@
 
         } else {
           // 未認証の場合、ログインページへリダイレクト
-          // alert("認証が必要です。ログインページにリダイレクトします。"); // このアラートを非表示にする場合はコメントアウト
           window.location.href = "index.html?redirected=true"; // リダイレクトフラグを追加
           return;
         }
       } catch (error) {
         console.error("認証チェックエラー:", error);
-        // alert("認証エラーが発生しました。ログインページに戻ります。"); // このアラートを非表示にする場合はコメントアウト
         window.location.href = "index.html?redirected=true"; // リダイレクトフラグを追加
         return;
       }
@@ -187,7 +358,6 @@
 
     // 認証されていない場合にリダイレクトするイベント
     socket.on("redirect", (url) => {
-        // alert("認証が必要です。ログインページにリダイレクトします。"); // このアラートを非表示にする場合はコメントアウト
         window.location.href = url + "?redirected=true";
     });
 
@@ -282,25 +452,109 @@
         socket.emit("unpinMessage", currentRoom);
     }
 
-    // ログアウトボタンのイベントリスナー
+    // ログアウトボタンのイベントリスナー（元々あったログアウトボタン）
     document.getElementById("logout-button").addEventListener("click", async () => {
-        try {
-            const response = await fetch("/logout", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" }
-            });
-            const result = await response.json();
-            if (result.success) {
-                alert(result.message);
-                window.location.href = "index.html"; // ログインページへリダイレクト
-            } else {
-                alert("ログアウト失敗: " + result.message);
-            }
-        } catch (error) {
-            console.error("ログアウトエラー:", error);
-            alert("ログアウト中にエラーが発生しました。");
+        confirmLogout(); // 設定モーダルからのログアウトと共通化
+    });
+
+    // 設定ボタンとモーダルウィンドウの処理
+    const settingsButton = document.getElementById("settings-button");
+    const settingsModal = document.getElementById("settingsModal");
+    // const closeButton = document.querySelector("#settingsModal .close"); // XボタンはHTMLのonclickで直接指定
+
+    settingsButton.addEventListener("click", () => {
+        settingsModal.style.display = "block";
+    });
+
+    // モーダルを閉じる関数
+    function closeSettingsModal() {
+        settingsModal.style.display = "none";
+    }
+    // XボタンのイベントリスナーはHTMLで直接指定したので不要
+    // closeButton.addEventListener("click", closeSettingsModal);
+    
+    window.addEventListener("click", (event) => { // モーダルの外側
+        if (event.target === settingsModal) {
+            closeSettingsModal();
         }
     });
+
+    // テーマ変更関数
+    function setTheme(theme) {
+        document.body.classList.remove('light-mode', 'dark-mode');
+        document.body.classList.add(theme + '-mode');
+        localStorage.setItem('theme', theme); // テーマ設定をローカルストレージに保存
+        // closeSettingsModal(); // テーマ変更後にモーダルを閉じない場合はコメントアウト
+    }
+
+    // ユーザー名変更関数
+    async function changeUsername() {
+        const newUsernameInput = document.getElementById("newUsernameInput");
+        const newUsername = newUsernameInput.value.trim();
+
+        // ゲストユーザーの場合は変更不可
+        if (username.startsWith("ゲスト_")) {
+            alert("ゲストユーザーはユーザー名を変更できません。");
+            newUsernameInput.value = ""; // 入力欄をクリア
+            return;
+        }
+
+        if (newUsername === "") {
+            alert("新しいユーザー名を入力してください！");
+            return;
+        }
+
+        if (newUsername === username) {
+            alert("現在のユーザー名と同じです。");
+            return;
+        }
+
+        try {
+            const response = await fetch("/change-username", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ newUsername }),
+            });
+            const result = await response.json();
+
+            if (result.success) {
+                alert(result.message);
+                username = result.newUsername; // クライアント側のユーザー名も更新
+                document.getElementById("usernameDisplay").textContent = `ようこそ、${username}さん！`;
+                newUsernameInput.value = ""; // 入力欄をクリア
+                // 変更を反映するため、チャット履歴を再ロードしても良いかもしれません
+                // fetchMessages(currentRoom);
+                closeSettingsModal();
+            } else {
+                alert("ユーザー名変更失敗: " + result.message);
+            }
+        } catch (error) {
+            console.error("ユーザー名変更エラー:", error);
+            alert("ユーザー名変更中にエラーが発生しました。");
+        }
+    }
+
+    // ログアウト確認と実行関数
+    async function confirmLogout() {
+        if (confirm("本当にログアウトしますか？")) {
+            try {
+                const response = await fetch("/logout", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" }
+                });
+                const result = await response.json();
+                if (result.success) {
+                    alert(result.message);
+                    window.location.href = "index.html"; // ログインページへリダイレクト
+                } else {
+                    alert("ログアウト失敗: " + result.message);
+                }
+            } catch (error) {
+                console.error("ログアウトエラー:", error);
+                alert("ログアウト中にエラーが発生しました。");
+            }
+        }
+    }
   </script>
 </body>
 </html>
