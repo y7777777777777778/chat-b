@@ -3,8 +3,8 @@ const path = require("path");
 const express = require("express");
 const fileUpload = require("express-fileupload");
 const { Server } = require("socket.io");
-const session = require("express-session"); // express-sessionをインポート
-const { v4: uuidv4 } = require("uuid");     // uuidをインポート
+const session = require("express-session");
+const { v4: uuidv4 } = require("uuid");
 
 const app = express();
 const server = require("http").createServer(app);
@@ -16,7 +16,7 @@ app.use(
     secret: "your-secret-key-super-secret", // 任意の強力な文字列に変更してください
     resave: false,
     saveUninitialized: true,
-    cookie: { secure: false }, // HTTPSを使用しない場合はfalseに設定 (RenderはHTTPSなのでtrueにするべきですが、今回はテスト用にfalseを維持)
+    cookie: { secure: false }, // RenderはHTTPSなのでtrueにするべきですが、開発中はfalseでも可
   })
 );
 
@@ -27,28 +27,43 @@ app.use(fileUpload());
 const MESSAGE_FILE = "messages.json";
 const PINNED_FILE = "pinnedMessages.json";
 const UPLOAD_DIR = "public/uploads";
+const USERS_FILE = "users.json"; // 登録ユーザー情報を保存するファイル
 
 // アップロードフォルダが存在しない場合、作成
 if (!fs.existsSync(UPLOAD_DIR)) {
   fs.mkdirSync(UPLOAD_DIR, { recursive: true });
 }
 
+// JSONファイルを読み込むヘルパー関数
+function readJsonFile(filePath, defaultValue = []) {
+  if (fs.existsSync(filePath)) {
+    try {
+      return JSON.parse(fs.readFileSync(filePath, "utf-8"));
+    } catch (e) {
+      console.error(`Error reading ${filePath}:`, e);
+      return defaultValue;
+    }
+  }
+  return defaultValue;
+}
+
+// JSONファイルに書き込むヘルパー関数
+function writeJsonFile(filePath, data) {
+  fs.writeFileSync(filePath, JSON.stringify(data, null, 2));
+}
+
 // メッセージを保存
 function saveMessage(data) {
-  let messages = fs.existsSync(MESSAGE_FILE)
-    ? JSON.parse(fs.readFileSync(MESSAGE_FILE, "utf-8"))
-    : [];
+  let messages = readJsonFile(MESSAGE_FILE);
   messages.push(data);
-  fs.writeFileSync(MESSAGE_FILE, JSON.stringify(messages, null, 2));
+  writeJsonFile(MESSAGE_FILE, messages);
 }
 
 // ピン止めメッセージを保存
 function savePinnedMessage(room, message) {
-  let pinned = fs.existsSync(PINNED_FILE)
-    ? JSON.parse(fs.readFileSync(PINNED_FILE, "utf-8"))
-    : {};
+  let pinned = readJsonFile(PINNED_FILE, {});
   pinned[room] = message;
-  fs.writeFileSync(PINNED_FILE, JSON.stringify(pinned, null, 2));
+  writeJsonFile(PINNED_FILE, pinned);
 }
 
 // ユーザーIDとユーザー名のセッション管理
@@ -58,14 +73,32 @@ app.use((req, res, next) => {
     req.session.userId = uuidv4();
     console.log("New userId generated for session:", req.session.userId);
   }
-  // ゲストとしてアクセスし、かつセッションにusernameがない場合は仮で設定
-  // chat.htmlでゲストログインする際にURLクエリパラメータ 'guest=true' を利用
-  if (!req.session.username && req.query.guest === "true") {
-    req.session.username = `ゲスト-${req.session.userId.substring(0, 4)}`; // 簡易的なゲスト名
-    console.log("Guest username set:", req.session.username);
-  }
   next();
 });
+
+// 認証チェックミドルウェア
+function isAuthenticated(req, res, next) {
+  if (req.session.authenticated === "true" || req.query.guest === "true") {
+    // ログイン済みユーザーの場合、userIdがなければ設定
+    if (req.session.authenticated === "true" && !req.session.userId) {
+      const users = readJsonFile(USERS_FILE, []);
+      const user = users.find(u => u.username === req.session.username);
+      if (user) {
+        req.session.userId = user.id; // 登録ユーザーのIDを使用
+      } else {
+        req.session.userId = uuidv4(); // 念のため新規割り当て
+      }
+    }
+    // ゲストユーザーの場合、usernameがなければ設定
+    if (req.query.guest === "true" && !req.session.username) {
+      req.session.username = `ゲスト-${req.session.userId.substring(0, 4)}`;
+    }
+    next();
+  } else {
+    console.log("Not authenticated, redirecting to entry.html");
+    res.redirect("/entry.html");
+  }
+}
 
 // ルートアクセス時に `entry.html` を提供
 app.get("/", (req, res) => {
@@ -81,71 +114,160 @@ app.get("/register.html", (req, res) => {
   res.sendFile(path.join(__dirname, "public", "register.html"));
 });
 
-app.get("/chat.html", (req, res) => {
-  // 認証済みか、またはゲストユーザーとして入室可能かチェック
-  // ゲストとしてアクセスする場合、URLに ?guest=true を含める
+app.get("/chat.html", isAuthenticated, (req, res) => {
+  res.sendFile(path.join(__dirname, "public", "chat.html"));
+});
+
+// 認証状態とユーザー名、IDを返すAPI
+app.get("/check-auth", (req, res) => {
   if (req.session.authenticated === "true" || req.query.guest === "true") {
-    res.sendFile(path.join(__dirname, "public", "chat.html"));
+    // ゲストログインの場合のユーザー名再設定
+    if (req.query.guest === "true" && !req.session.username) {
+        req.session.username = `ゲスト-${req.session.userId.substring(0, 4)}`;
+    }
+    res.json({
+      authenticated: true,
+      username: req.session.username,
+      userId: req.session.userId,
+    });
   } else {
-    res.redirect("/entry.html"); // 認証されていなければentryページへリダイレクト
+    res.json({ authenticated: false });
   }
 });
 
 // ログインAPI
 app.post("/login", (req, res) => {
   const { username, password } = req.body;
-  // ここでは簡略化のため、ユーザー名とパスワードをハードコード
-  // 実際にはデータベースなどでユーザー認証を行う
-  if (username === "user1" && password === "pass1") { // 例: ユーザー名「user1」、パスワード「pass1」
+  const users = readJsonFile(USERS_FILE, []);
+  const user = users.find(u => u.username === username && u.password === password);
+
+  if (user) {
     req.session.authenticated = "true";
-    req.session.username = username;
-    // ログインユーザーにも新しいuserIdを割り当てるか、既存のものを利用（ここでは新しく割り当て）
-    req.session.userId = uuidv4(); 
+    req.session.username = user.username;
+    req.session.userId = user.id; // 登録ユーザーの固有IDをセッションに保存
     console.log("User logged in:", username, "UserId:", req.session.userId);
-    res.json({ success: true, username: username, userId: req.session.userId });
+    res.json({ success: true, username: user.username, userId: user.id });
   } else {
     console.log("Login failed for username:", username);
-    res.json({ success: false, message: "Invalid credentials" });
+    res.json({ success: false, message: "ユーザー名またはパスワードが違います。" });
   }
 });
 
+// 登録API
+app.post("/register", (req, res) => {
+    const { username, password } = req.body;
+    let users = readJsonFile(USERS_FILE, []);
+
+    if (users.some(u => u.username === username)) {
+        return res.json({ success: false, message: "このユーザー名は既に存在します。" });
+    }
+
+    const newUser = {
+        id: uuidv4(), // 新しいユーザーにUUIDを割り当てる
+        username,
+        password
+    };
+    users.push(newUser);
+    writeJsonFile(USERS_FILE, users);
+    console.log("New user registered:", newUser.username, "UserId:", newUser.id);
+    res.json({ success: true, message: "登録が完了しました！" });
+});
+
 // ユーザー名変更API
-app.post("/change-username", (req, res) => {
+app.post("/change-username", isAuthenticated, (req, res) => {
   const { newUsername } = req.body;
   if (!newUsername || newUsername.trim() === "") {
     return res.status(400).json({ success: false, message: "新しいユーザー名を入力してください。" });
   }
 
-  // セッションのユーザー名を更新
   const oldUsername = req.session.username;
-  req.session.username = newUsername;
-  console.log(`Username changed from ${oldUsername} to ${newUsername} for userId: ${req.session.userId}`);
+  const userId = req.session.userId;
 
-  updateUserList(); // ユーザーリストを更新して、全クライアントに新しいユーザー名を通知
+  // 登録ユーザーの場合、users.jsonも更新
+  let users = readJsonFile(USERS_FILE, []);
+  const userIndex = users.findIndex(u => u.id === userId); // IDでユーザーを検索
+
+  if (userIndex !== -1) { // 登録ユーザーの場合
+      if (users.some(u => u.username === newUsername && u.id !== userId)) {
+          return res.status(400).json({ success: false, message: "そのユーザー名は既に使用されています。" });
+      }
+      users[userIndex].username = newUsername;
+      writeJsonFile(USERS_FILE, users);
+  }
+  
+  // セッションのユーザー名を更新
+  req.session.username = newUsername;
+
+  // 過去のメッセージのユーザー名も更新（任意だが、整合性のため）
+  let messages = readJsonFile(MESSAGE_FILE);
+  messages = messages.map(msg => {
+      if (msg.userId === userId) { // userIdでメッセージをフィルタリング
+          msg.user = newUsername;
+      }
+      return msg;
+  });
+  writeJsonFile(MESSAGE_FILE, messages);
+
+  console.log(`Username changed from ${oldUsername} to ${newUsername} for userId: ${userId}`);
+  
+  // Socket.IOでユーザーリストを更新して全クライアントに通知
+  io.emit("updateUserList", getAllConnectedUsers());
 
   res.json({ success: true, newUsername: newUsername });
 });
 
+
+// ログアウトAPI
+app.post("/logout", (req, res) => {
+  req.session.destroy((err) => {
+    if (err) {
+      console.error("Session destroy error:", err);
+      return res.status(500).json({ success: false, message: "ログアウトに失敗しました。" });
+    }
+    res.json({ success: true });
+  });
+});
+
+// ユーザーリスト取得API (DM用)
+app.get("/users", isAuthenticated, (req, res) => {
+    const users = readJsonFile(USERS_FILE, []);
+    const currentUserId = req.session.userId;
+
+    // ログイン中のユーザー（自分自身）を除くリストを返す
+    // ゲストユーザーは登録ユーザーリストには含まれないため、このフィルタリングは登録ユーザーのみに適用
+    const availableUsers = users.filter(user => user.id !== currentUserId);
+    
+    // 実際にオンラインのユーザー情報も付加する（socket.ioのソケット情報から）
+    const connectedUsers = getAllConnectedUsers();
+    const finalUserList = availableUsers.map(user => {
+        const isOnline = connectedUsers.some(cu => cu.userId === user.id);
+        return {
+            id: user.id,
+            username: user.username,
+            online: isOnline // オンライン状態を追加
+        };
+    });
+
+    res.json({ success: true, users: finalUserList });
+});
+
+
 // メッセージ送信API
-app.post("/send-message", (req, res) => {
-  const { message, room, dmTargetUser, dmTargetUserId } = req.body; 
+app.post("/send-message", isAuthenticated, (req, res) => {
+  const { message, room, dmTargetUser, dmTargetUserId } = req.body;
+  const senderUserId = req.session.userId;
+  const senderUsername = req.session.username;
+
   if (!message.trim()) {
     return res.status(400).json({ success: false, message: "メッセージは空にできません。" });
   }
-
-  // 送信者のuserIdをセッションから取得
-  const senderUserId = req.session.userId;
-  // 送信者のusernameをセッションから取得
-  const senderUsername = req.session.username; 
-
   if (!senderUsername || !senderUserId) {
-      return res.status(401).json({ success: false, message: "ユーザー情報が取得できません。再ログインしてください。" });
+    return res.status(401).json({ success: false, message: "ユーザー情報が取得できません。再ログインしてください。" });
   }
 
   const messageData = {
     user: senderUsername,
     text: message,
-    room: room,
     timestamp: new Date().toISOString(),
     pinned: false,
     userId: senderUserId // 送信者のIDを追加
@@ -156,15 +278,22 @@ app.post("/send-message", (req, res) => {
     messageData.dm = true;
     messageData.dmTargetUser = dmTargetUser;
     messageData.dmTargetUserId = dmTargetUserId;
+    messageData.room = null; // DMなのでroomはnull
 
-    // 送信者と受信者両方にDMを送信 (ソケットIDではなくユーザーIDのルームに送信)
-    io.to(dmTargetUserId).emit("message", messageData);
+    saveMessage(messageData); // DMも保存
+
+    // 送信者と受信者両方にDMを送信
+    io.to(senderUserId).emit("message", messageData); // 送信者自身
     if (senderUserId !== dmTargetUserId) { // 自分自身へのDMでなければ
-      io.to(senderUserId).emit("message", messageData);
+      io.to(dmTargetUserId).emit("message", messageData); // 受信者
     }
     console.log(`DM sent from ${senderUsername} (${senderUserId}) to ${dmTargetUser} (${dmTargetUserId})`);
   } else {
     // 通常のチャットの場合
+    if (!room) {
+        return res.status(400).json({ success: false, message: "ルーム情報が必要です。" });
+    }
+    messageData.room = room;
     saveMessage(messageData);
     io.to(room).emit("message", messageData);
     console.log(`Message sent to room ${room} from ${senderUsername}: ${message}`);
@@ -174,21 +303,20 @@ app.post("/send-message", (req, res) => {
 });
 
 // ファイルアップロードAPI
-app.post("/upload", (req, res) => {
+app.post("/upload", isAuthenticated, (req, res) => {
   try {
     if (!req.files || Object.keys(req.files).length === 0) {
       return res.status(400).json({ error: "No files were uploaded!" });
     }
 
     const file = req.files.file;
-    const filePath = `${UPLOAD_DIR}/${file.name}`;
-    const room = req.body.room;
+    const uniqueFileName = `${Date.now()}-${file.name}`; // ファイル名重複対策
+    const filePath = `${UPLOAD_DIR}/${uniqueFileName}`;
+    const room = req.body.room; // 公開チャットの場合
     const dmTargetUser = req.body.dmTargetUser;
     const dmTargetUserId = req.body.dmTargetUserId;
 
-    // 送信者のuserIdをセッションから取得
     const senderUserId = req.session.userId;
-    // 送信者のusernameをセッションから取得
     const senderUsername = req.session.username;
 
     if (!senderUsername || !senderUserId) {
@@ -201,11 +329,10 @@ app.post("/upload", (req, res) => {
         return res.status(500).json({ error: err.message });
       }
 
-      const fileUrl = `/uploads/${file.name}`;
+      const fileUrl = `/uploads/${uniqueFileName}`; // ユニークなファイル名を使用
       const fileMessage = {
         user: senderUsername,
         file: fileUrl,
-        room: room,
         timestamp: new Date().toISOString(),
         pinned: false,
         userId: senderUserId // 送信者のIDを追加
@@ -216,14 +343,21 @@ app.post("/upload", (req, res) => {
         fileMessage.dm = true;
         fileMessage.dmTargetUser = dmTargetUser;
         fileMessage.dmTargetUserId = dmTargetUserId;
+        fileMessage.room = null; // DMなのでroomはnull
 
-        io.to(dmTargetUserId).emit("message", fileMessage);
+        saveMessage(fileMessage);
+
+        io.to(senderUserId).emit("message", fileMessage);
         if (senderUserId !== dmTargetUserId) {
-          io.to(senderUserId).emit("message", fileMessage);
+          io.to(dmTargetUserId).emit("message", fileMessage);
         }
         console.log(`DM file sent from ${senderUsername} (${senderUserId}) to ${dmTargetUser} (${dmTargetUserId})`);
       } else {
         // 通常のチャットの場合
+        if (!room) {
+            return res.status(400).json({ success: false, message: "ルーム情報が必要です。" });
+        }
+        fileMessage.room = room;
         saveMessage(fileMessage);
         io.to(room).emit("message", fileMessage);
         console.log(`File sent to room ${room} from ${senderUsername}: ${fileUrl}`);
@@ -237,100 +371,128 @@ app.post("/upload", (req, res) => {
   }
 });
 
+
 // Socket.IOの処理
 io.on("connection", (socket) => {
   console.log("新しいユーザーが接続しました:", socket.id);
 
-  socket.on("joinRoom", (room, username, userId) => {
-    // 以前参加していたルームから離脱（ルーム切り替え時など）
-    if (socket.currentRoom && socket.currentRoom !== room) {
-        socket.leave(socket.currentRoom);
-        console.log(`${socket.username} (${socket.userId}) left room ${socket.currentRoom}`);
+  // セッション情報をソケットに紐付ける
+  const session = socket.request.session;
+  socket.username = session.username;
+  socket.userId = session.userId; // ログインユーザーまたはゲストのuserId
+
+  // 接続時に自身のuserIdをルームとして参加させる（DM受信のため）
+  if (socket.userId) {
+    socket.join(socket.userId);
+    console.log(`${socket.username} (${socket.userId}) joined private room: ${socket.userId}`);
+  }
+
+  // ユーザーリストを更新して全員に送信
+  updateUserList();
+
+  socket.on("joinRoom", (room, roomType, dmTargetUserId = null) => {
+    // 以前参加していたルームから離脱
+    if (socket.currentRoom) {
+      socket.leave(socket.currentRoom);
+      console.log(`${socket.username} (${socket.userId}) left room ${socket.currentRoom}`);
     }
-    // 以前紐付いていたuserIdのルームから離脱（ユーザー名変更時など）
-    // socket.userIdが以前のuserIdで、かつ現在のuserIdと異なる場合に離脱
-    if (socket.userId && socket.userId !== userId) {
-        socket.leave(socket.userId);
-        console.log(`Socket ${socket.id} left old userId room ${socket.userId}`);
+
+    let messages = readJsonFile(MESSAGE_FILE);
+    let relevantMessages = [];
+
+    if (roomType === 'public') {
+      socket.join(room); // 公開チャットルームへの参加
+      socket.currentRoom = room;
+      socket.currentRoomType = roomType;
+
+      relevantMessages = messages.filter(m => m.room === room && !m.dm); // 公開メッセージのみ
+
+      console.log(`${socket.username} (${socket.userId}) joined public room: ${room}`);
+
+    } else if (roomType === 'dm' && dmTargetUserId) {
+      // DMの場合、送信者と受信者の両方のIDをルーム名として利用
+      // 小さいID_大きいID の形式で一貫したルーム名を生成
+      const dmRoomName = [socket.userId, dmTargetUserId].sort().join('_');
+      socket.join(dmRoomName);
+      socket.currentRoom = dmRoomName;
+      socket.currentRoomType = roomType;
+      socket.currentDmTargetId = dmTargetUserId; // DM相手のIDをソケットに保存
+
+      relevantMessages = messages.filter(m =>
+        m.dm &&
+        ((m.userId === socket.userId && m.dmTargetUserId === dmTargetUserId) ||
+         (m.userId === dmTargetUserId && m.dmTargetUserId === socket.userId))
+      );
+
+      console.log(`${socket.username} (${socket.userId}) joined DM room with ${dmTargetUserId}: ${dmRoomName}`);
+    } else {
+        console.warn("Invalid joinRoom request:", room, roomType, dmTargetUserId);
+        return;
     }
 
-    socket.join(room); // 一般チャットルームへの参加
-    socket.join(userId); // 個別ユーザー宛のルームとしてuserIdを使用 (これによりDM送信が可能に)
-
-    socket.username = username; // socketオブジェクトにユーザー名を保存
-    socket.userId = userId;     // socketオブジェクトにユーザーIDを保存
-    socket.currentRoom = room;  // 現在のルームをソケットに保存
-
-    console.log(`${username} (${userId}) joined room ${room} and also joined private room ${userId}`);
-
-    const messages = fs.existsSync(MESSAGE_FILE)
-      ? JSON.parse(fs.readFileSync(MESSAGE_FILE, "utf-8"))
-      : [];
-    
-    // 参加したルームのメッセージ履歴と、自分宛のDM履歴を送信
-    const relevantMessages = messages.filter(m => 
-        m.room === room || (m.dm && (m.userId === userId || m.dmTargetUserId === userId))
-    );
     socket.emit("messageHistory", relevantMessages);
 
-    const pinned = fs.existsSync(PINNED_FILE)
-      ? JSON.parse(fs.readFileSync(PINNED_FILE, "utf-8"))
-      : {};
-    if (pinned[room])
+    const pinned = readJsonFile(PINNED_FILE, {});
+    // DMルームにはピン留めメッセージがない前提
+    if (roomType === 'public' && pinned[room]) {
       socket.emit("updatePinnedMessage", { message: pinned[room] });
-
-    // 接続しているユーザーリストを更新して全員に送信
-    updateUserList();
+    } else {
+      socket.emit("updatePinnedMessage", { message: null }); // DMではピン留めなし
+    }
   });
 
+
   socket.on("pinMessage", (data) => {
+    if (socket.currentRoomType !== 'public') {
+        console.log("DMではピン留めできません。");
+        return;
+    }
     savePinnedMessage(data.room, data.message);
     io.to(data.room).emit("updatePinnedMessage", { message: data.message });
     console.log(`Message pinned in room ${data.room}`);
   });
 
   socket.on("unpinMessage", (room) => {
-    let pinned = fs.existsSync(PINNED_FILE)
-      ? JSON.parse(fs.readFileSync(PINNED_FILE, "utf-8"))
-      : {};
-    delete pinned[room];
-    fs.writeFileSync(PINNED_FILE, JSON.stringify(pinned, null, 2));
+    if (socket.currentRoomType !== 'public') {
+        console.log("DMではピン留め解除できません。");
+        return;
+    }
+    savePinnedMessage(room, null); // nullを保存することで解除
     io.to(room).emit("updatePinnedMessage", { message: null });
     console.log(`Message unpinned in room ${room}`);
   });
 
   socket.on("disconnect", () => {
     console.log("ユーザーが切断しました:", socket.id, "Username:", socket.username, "UserId:", socket.userId);
-    // 切断時に参加していたルームとユーザーIDのルームから離脱
-    // socket.userIdが設定されている場合のみ離脱処理を行う
-    if (socket.currentRoom) {
-      socket.leave(socket.currentRoom);
-    }
-    if (socket.userId) {
-      socket.leave(socket.userId);
-    }
-    updateUserList(); // ユーザーリストを更新
+    // ユーザーリストを更新
+    updateUserList();
   });
 });
 
+// 接続中の全ユーザーリストを返す関数
+function getAllConnectedUsers() {
+    const connectedUsers = [];
+    const uniqueUserIds = new Set(); // 重複を防ぐためのSet
+
+    io.of("/").sockets.forEach(socket => {
+        if (socket.username && socket.userId && !uniqueUserIds.has(socket.userId)) {
+            connectedUsers.push({
+                username: socket.username,
+                userId: socket.userId
+            });
+            uniqueUserIds.add(socket.userId);
+        }
+    });
+    return connectedUsers;
+}
+
 // ユーザーリストを更新して全クライアントに送信する関数
 function updateUserList() {
-  const users = [];
-  const uniqueUserIds = new Set(); // 重複排除のためSetを使用
-
-  // 全ての接続されているソケットを走査
-  for (let [id, socket] of io.of("/").sockets) {
-    // socket.username と socket.userId が設定されているソケットのみを対象
-    // そして、まだリストに追加されていないuserIdのみを追加
-    if (socket.username && socket.userId && !uniqueUserIds.has(socket.userId)) {
-      users.push({ username: socket.username, userId: socket.userId });
-      uniqueUserIds.add(socket.userId);
-    }
-  }
-  // 全クライアントに更新されたユーザーリストを送信
-  io.emit("updateUserList", users);
-  console.log("Updated user list:", users.map(u => `${u.username}(${u.userId ? u.userId.substring(0,4) : 'N/A'}...)`).join(", "));
+  const usersOnline = getAllConnectedUsers();
+  io.emit("updateUserList", usersOnline);
+  console.log("Updated online user list:", usersOnline.map(u => `${u.username}(${u.userId ? u.userId.substring(0,4) : 'N/A'})`).join(", "));
 }
+
 
 const PORT = process.env.PORT || 3000;
 server.listen(PORT, () => {
