@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html lang="ja">
 <head>
@@ -96,13 +95,13 @@
 
         } else {
           // 未認証の場合、ログインページへリダイレクト
-          alert("認証が必要です。ログインページにリダイレクトします。"); // 明示的なアラート
+          // alert("認証が必要です。ログインページにリダイレクトします。"); // このアラートを非表示にする場合はコメントアウト
           window.location.href = "index.html?redirected=true"; // リダイレクトフラグを追加
           return;
         }
       } catch (error) {
         console.error("認証チェックエラー:", error);
-        alert("認証エラーが発生しました。ログインページに戻ります。");
+        // alert("認証エラーが発生しました。ログインページに戻ります。"); // このアラートを非表示にする場合はコメントアウト
         window.location.href = "index.html?redirected=true"; // リダイレクトフラグを追加
         return;
       }
@@ -187,7 +186,7 @@
 
     // 認証されていない場合にリダイレクトするイベント
     socket.on("redirect", (url) => {
-        alert("認証が必要です。ログインページにリダイレクトします。");
+        // alert("認証が必要です。ログインページにリダイレクトします。"); // このアラートを非表示にする場合はコメントアウト
         window.location.href = url + "?redirected=true";
     });
 
