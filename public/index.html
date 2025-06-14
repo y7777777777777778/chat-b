@@ -1,39 +1,73 @@
-
 <!DOCTYPE html>
 <html lang="ja">
 <head>
     <meta charset="UTF-8">
-    <title>個別ログイン</title>
+    <title>ログイン</title>
+    <style>
+        body { font-family: sans-serif; display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 100vh; margin: 0; background-color: #f4f4f4; }
+        div { background: white; padding: 30px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); text-align: center; }
+        h1 { color: #333; }
+        input { padding: 10px; margin: 10px 0; width: 200px; border: 1px solid #ddd; border-radius: 4px; }
+        button { padding: 10px 20px; background-color: #007bff; color: white; border: none; border-radius: 5px; cursor: pointer; transition: background-color 0.3s ease; }
+        button:hover { background-color: #0056b3; }
+        a { color: #007bff; text-decoration: none; }
+        a:hover { text-decoration: underline; }
+    </style>
+</head>
+<body>
+    <div>
+        <h1>ログイン</h1>
+        <input type="text" id="username" placeholder="ユーザー名を入力" />
+        <input type="password" id="password" placeholder="パスワードを入力" />
+        <button onclick="login()">ログイン</button>
+        <p>アカウントがない方は <a href="register.html">新規登録</a> してください。</p>
+    </div>
+
     <script>
-        function login() {
+        // ページロード時に認証状態をチェック
+        window.onload = async () => {
+            try {
+                const response = await fetch("/check-auth");
+                const result = await response.json();
+                if (result.authenticated) {
+                    // 既に認証済みならチャットページへリダイレクト
+                    window.location.href = "chat.html";
+                }
+            } catch (error) {
+                console.error("認証チェックエラー:", error);
+                // エラーの場合も何もしない（未認証状態として扱う）
+            }
+        };
+
+        async function login() {
             const username = document.getElementById("username").value;
             const password = document.getElementById("password").value;
 
-            const registeredUser = localStorage.getItem("registeredUser");
-            const registeredPassword = localStorage.getItem("registeredPassword");
+            if (username.trim() === "" || password.trim() === "") {
+                alert("ユーザー名とパスワードを入力してください！");
+                return;
+            }
 
-            if (username === registeredUser && password === registeredPassword) {
-                localStorage.setItem("authenticated", "true");
-                localStorage.setItem("username", username);
-                window.location.href = "chat.html";
-            } else {
-                alert("ユーザー名またはパスワードが違います！");
+            try {
+                const response = await fetch("/login", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ username, password }),
+                });
+                const result = await response.json();
+
+                if (result.success) {
+                    alert(result.message);
+                    // ログイン成功したら chat.html へリダイレクト
+                    window.location.href = "chat.html";
+                } else {
+                    alert("ログイン失敗: " + result.message);
+                }
+            } catch (error) {
+                console.error("ログインエラー:", error);
+                alert("ログイン中にエラーが発生しました。");
             }
         }
-
-        function guestLogin() {
-            localStorage.setItem("authenticated", "true");
-            localStorage.setItem("username", "ゲスト");
-            window.location.href = "chat.html";
-        }
     </script>
-</head>
-<body>
-    <h1>個別ログイン</h1>
-    <input type="text" id="username" placeholder="ユーザー名を入力" />
-    <input type="password" id="password" placeholder="パスワードを入力" />
-    <button onclick="login()">ログイン</button>
-    <p>アカウントがない方は <a href="register.html">新規登録</a> してください。</p>
-    <button onclick="guestLogin()">ゲストとして参加</button>
 </body>
 </html>
