@@ -10,9 +10,12 @@ const app = express();
 const server = require("http").createServer(app);
 const io = new Server(server);
 
+// !!! ここを修正します - SESSION_SECRETを環境変数から取得 !!!
+const SESSION_SECRET = process.env.SESSION_SECRET || "fallback-secret-for-development-do-not-use-in-production";
+
 // セッションミドルウェアの設定
 const sessionMiddleware = session({
-  secret: "your-secret-key-super-secret", // !!! ここは必ずユニークな強い文字列に変更してください !!!
+  secret: SESSION_SECRET, // 環境変数から取得するように変更
   resave: false,
   saveUninitialized: true,
   cookie: { secure: true } // Renderにデプロイする場合、HTTPSなのでtrueに設定
