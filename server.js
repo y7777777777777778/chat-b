@@ -87,7 +87,8 @@ function isAuthenticated(req, res, next) {
     const alwaysPublicPaths = [
         '/login',
         '/register',
-        '/guest-login' // ゲストログインも認証不要
+        '/guest-login', // ゲストログインも認証不要
+        '/change-username' // ユーザー名変更も認証済みのセッションでアクセス可能
     ];
 
     const publicGetPaths = [
@@ -205,7 +206,7 @@ app.post("/login", (req, res) => {
     });
 });
 
-// ゲストログインエンドポイントをここに追加
+// ゲストログインエンドポイント
 app.post("/guest-login", (req, res) => {
     // ユニークなゲスト名を生成 (例: ゲスト_ランダムな4桁の数字)
     const guestUsername = "ゲスト_" + Math.floor(1000 + Math.random() * 9000);
@@ -222,6 +223,49 @@ app.post("/guest-login", (req, res) => {
         res.json({ success: true, message: "ゲストとして参加しました！", username: guestUsername });
     });
 });
+
+// ユーザー名変更エンドポイント
+app.post("/change-username", (req, res) => {
+    const { newUsername } = req.body;
+    const userId = req.session.userId;
+    const oldUsername = req.session.username;
+
+    if (!userId) {
+        // ゲストユーザーはIDがないので、変更不可とする
+        // あるいは、ゲストユーザー用の特殊な変更ロジックをここに記述することも可能
+        return res.status(401).json({ success: false, message: "このアカウントタイプではユーザー名を変更できません。" });
+    }
+    if (!newUsername || newUsername.trim() === "") {
+        return res.status(400).json({ success: false, message: "新しいユーザー名を入力してください。" });
+    }
+    if (newUsername === oldUsername) {
+        return res.status(400).json({ success: false, message: "現在のユーザー名と同じです。" });
+    }
+
+    db.run("UPDATE users SET username = ? WHERE id = ?", [newUsername, userId], function(err) {
+        if (err) {
+            if (err.message.includes("UNIQUE constraint failed: users.username")) {
+                return res.status(409).json({ success: false, message: "このユーザー名は既に存在します。" });
+            }
+            console.error("Change username DB error:", err.message);
+            return res.status(500).json({ success: false, message: "ユーザー名の変更中にエラーが発生しました。" });
+        }
+        if (this.changes === 0) {
+            return res.status(404).json({ success: false, message: "ユーザーが見つかりませんでした。" });
+        }
+
+        // セッションのユーザー名を更新
+        req.session.username = newUsername;
+        req.session.save((err) => {
+            if (err) {
+                console.error("Session update error after username change:", err);
+                return res.status(500).json({ success: false, message: "ユーザー名変更後にセッション保存エラーが発生しました。" });
+            }
+            res.json({ success: true, message: "ユーザー名を変更しました！", newUsername: newUsername });
+        });
+    });
+});
+
 
 // ログアウトエンドポイント
 app.post("/logout", (req, res) => {
