@@ -68,7 +68,8 @@
     // ページロード時に認証状態をチェックし、ユーザー名を取得
     window.onload = async () => {
       try {
-        const response = await fetch("/check-auth");
+        // **キャッシュを無効化するクエリパラメータを追加**
+        const response = await fetch(`/check-auth?t=${new Date().getTime()}`);
         const result = await response.json();
         if (result.authenticated) {
           username = result.username;
