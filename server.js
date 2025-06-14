@@ -25,7 +25,7 @@ if (!fs.existsSync(UPLOAD_DIR)) {
     fs.mkdirSync(UPLOAD_DIR, { recursive: true });
 }
 
-// **SQLiteデータベースの初期化とテーブル作成**
+// SQLiteデータベースの初期化とテーブル作成
 const dbPath = "./chat.db";
 const db = new sqlite3.Database(dbPath, sqlite3.OPEN_READWRITE | sqlite3.OPEN_CREATE, (err) => {
     if (err) {
@@ -66,7 +66,7 @@ const sessionStore = new KnexSessionStore({
     clearInterval: 1000 * 60 * 60
 });
 
-// **セッションミドルウェアの設定**
+// セッションミドルウェアの設定
 const sessionMiddleware = session({
     secret: process.env.SESSION_SECRET || "your_super_secret_key_here_please_change_me_and_make_it_long_and_random",
     resave: false,
@@ -81,7 +81,7 @@ const sessionMiddleware = session({
 });
 app.use(sessionMiddleware);
 
-// **認証チェックミドルウェア**
+// 認証チェックミドルウェア
 function isAuthenticated(req, res, next) {
     const alwaysPublicPaths = [
         '/login',
@@ -92,7 +92,7 @@ function isAuthenticated(req, res, next) {
         '/',
         '/index.html',
         '/register.html',
-        '/chat.html',
+        '/chat.html', // chat.html自体は公開だが、中のfetchは認証される
         '/check-auth'
     ];
 
@@ -226,7 +226,7 @@ app.get("/check-auth", (req, res) => {
 // メッセージ送信のAPIエンドポイント
 app.post("/send-message", (req, res) => {
     const { message, room } = req.body;
-    const username = req.session.username;
+    const username = req.session.username; // セッションからユーザー名を取得
 
     if (!username) {
         return res.status(401).json({ error: "認証されていません。" });
@@ -247,7 +247,7 @@ app.get("/messages", (req, res) => {
     if (!room) {
         return res.status(400).json({ error: "roomパラメータが必要です。" });
     }
-    if (!req.session.username) {
+    if (!req.session.username) { // ここでも認証チェック
         return res.status(401).json({ error: "認証されていません。" });
     }
 
@@ -257,7 +257,7 @@ app.get("/messages", (req, res) => {
 
 // ファイルアップロードのAPIエンドポイント
 app.post("/upload", (req, res) => {
-    const username = req.session.username;
+    const username = req.session.username; // セッションからユーザー名を取得
     const room = req.body.room;
 
     if (!username) {
@@ -301,7 +301,7 @@ io.on("connection", (socket) => {
         console.log(`Socket connected for user: ${socket.username}`);
     } else {
         console.warn("Unauthenticated Socket.IO connection attempt. Disconnecting.");
-        socket.emit("redirect", "/index.html");
+        socket.emit("redirect", "/index.html"); // クライアントにリダイレクトを指示
         socket.disconnect(true);
         return;
     }
@@ -309,7 +309,7 @@ io.on("connection", (socket) => {
     socket.on("joinRoom", (data) => {
         const { room } = data;
         
-        if (!socket.username) {
+        if (!socket.username) { // Socket.IO接続時も認証を再確認
              console.warn("User tried to join room without authentication via Socket.");
              socket.emit("redirect", "/index.html");
              socket.disconnect(true);
