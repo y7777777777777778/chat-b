@@ -79,7 +79,8 @@
         // ページロード時に認証状態をチェック
         window.onload = async () => {
             try {
-                const response = await fetch("/check-auth");
+                // **キャッシュを無効化するクエリパラメータを追加**
+                const response = await fetch(`/check-auth?t=${new Date().getTime()}`);
                 const result = await response.json();
                 if (result.authenticated) {
                     // 既に認証済みならチャットページへリダイレクト
@@ -88,7 +89,7 @@
                     // URLにリダイレクトフラグがあればアラートを出す
                     const urlParams = new URLSearchParams(window.location.search);
                     if (urlParams.get('redirected') === 'true') {
-                        alert("認証が必要です。ログインページにリダイレクトされました。");
+                        // alert("認証が必要です。ログインページにリダイレクトされました。"); // コメントアウトして非表示に
                     }
                 }
             } catch (error) {
