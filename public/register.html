@@ -1,26 +1,79 @@
+
 <!DOCTYPE html>
 <html lang="ja">
 <head>
     <meta charset="UTF-8">
     <title>新規登録</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <link href="https://fonts.googleapis.com/css2?family=Poppins&display=swap" rel="stylesheet">
     <style>
-        body { font-family: sans-serif; display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 100vh; margin: 0; background-color: #f4f4f4; }
-        div { background: white; padding: 30px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); text-align: center; }
-        h1 { color: #333; }
-        input { padding: 10px; margin: 10px 0; width: 200px; border: 1px solid #ddd; border-radius: 4px; }
-        button { padding: 10px 20px; background-color: #007bff; color: white; border: none; border-radius: 5px; cursor: pointer; transition: background-color 0.3s ease; }
-        button:hover { background-color: #0056b3; }
-        a { color: #007bff; text-decoration: none; }
-        a:hover { text-decoration: underline; }
+        body {
+            font-family: 'Poppins', sans-serif;
+            margin: 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            background-color: #f0f2f5;
+            color: #333;
+        }
+        .container {
+            background-color: #fff;
+            padding: 30px;
+            border-radius: 8px;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+            width: 100%;
+            max-width: 400px;
+            text-align: center;
+        }
+        h1 {
+            color: #262626;
+            margin-bottom: 25px;
+            font-size: 2em;
+        }
+        input {
+            width: calc(100% - 20px);
+            padding: 12px;
+            margin-bottom: 15px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            font-size: 1em;
+        }
+        button {
+            width: calc(100% - 20px);
+            padding: 12px;
+            border: none;
+            border-radius: 5px;
+            background-color: #3897f0;
+            color: white;
+            font-size: 1.1em;
+            cursor: pointer;
+            transition: background-color 0.2s ease;
+            margin-bottom: 10px;
+        }
+        button:hover {
+            background-color: #0056b3;
+        }
+        p {
+            margin-top: 20px;
+            font-size: 0.9em;
+        }
+        a {
+            color: #3897f0;
+            text-decoration: none;
+        }
+        a:hover {
+            text-decoration: underline;
+        }
     </style>
 </head>
 <body>
-    <div>
+    <div class="container">
         <h1>新規登録</h1>
-        <input type="text" id="username" placeholder="ユーザー名を入力" />
-        <input type="password" id="password" placeholder="パスワードを入力" />
+        <input type="text" id="username" placeholder="ユーザー名を入力" required />
+        <input type="password" id="password" placeholder="パスワードを入力" required />
         <button onclick="register()">登録</button>
-        <p>すでにアカウントをお持ちですか？ <a href="index.html">ログイン</a></p>
+        <p>既にアカウントをお持ちの方は <a href="index.html">ログイン</a> してください。</p>
     </div>
 
     <script>
@@ -34,17 +87,16 @@
             }
 
             try {
-                // サーバーの /register エンドポイントにデータを送信
                 const response = await fetch("/register", {
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
                     body: JSON.stringify({ username, password }),
                 });
-                const result = await response.json(); // サーバーからのJSONレスポンスをパース
+                const result = await response.json();
 
                 if (result.success) {
                     alert(result.message);
-                    window.location.href = "index.html"; // ログイン画面へ移動
+                    window.location.href = "index.html"; // 登録成功後、ログインページへリダイレクト
                 } else {
                     alert("登録失敗: " + result.message);
                 }
