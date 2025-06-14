@@ -3,25 +3,24 @@ const path = require("path");
 const express = require("express");
 const fileUpload = require("express-fileupload");
 const { Server } = require("socket.io");
-const sqlite3 = require("sqlite3").verbose(); // SQLite3をインポート
-const bcrypt = require("bcrypt"); // パスワードハッシュ化をインポート
-const session = require("express-session"); // セッション管理をインポート
-const Knex = require("knex"); // SQLクエリビルダをインポート
-const KnexSessionStore = require("connect-session-knex")(session); // セッションストアをインポート
+const sqlite3 = require("sqlite3").verbose();
+const bcrypt = require("bcrypt");
+const session = require("express-session");
+const Knex = require("knex");
+const KnexSessionStore = require("connect-session-knex")(session);
 
 const app = express();
 const server = require("http").createServer(app);
 const io = new Server(server);
 
-app.use(express.json()); // JSONボディをパース
-app.use(express.static("public")); // publicフォルダを静的ファイルとして提供
-app.use(fileUpload()); // ファイルアップロードミドルウェア
+app.use(express.json());
+app.use(express.static("public"));
+app.use(fileUpload());
 
 const MESSAGE_FILE = "messages.json";
 const PINNED_FILE = "pinnedMessages.json";
 const UPLOAD_DIR = "public/uploads";
 
-// アップロードフォルダが存在しない場合、作成
 if (!fs.existsSync(UPLOAD_DIR)) {
     fs.mkdirSync(UPLOAD_DIR, { recursive: true });
 }
@@ -32,7 +31,6 @@ const db = new sqlite3.Database("./chat.db", (err) => {
         console.error("Database connection error:", err.message);
     } else {
         console.log("Connected to the SQLite database.");
-        // usersテーブルの作成（存在しない場合）
         db.run(`CREATE TABLE IF NOT EXISTS users (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             username TEXT UNIQUE NOT NULL,
@@ -58,39 +56,64 @@ const knex = Knex({
 
 // セッションストアの設定
 const sessionStore = new KnexSessionStore({
-    tablename: "sessions", // セッションを保存するテーブル名
-    sidfieldname: "sid", // セッションIDを保存するカラム名
+    tablename: "sessions",
+    sidfieldname: "sid",
     knex: knex,
-    createtable: true, // テーブルが存在しない場合は作成
+    createtable: true,
 });
 
-// セッションミドルウェアの設定
-app.use(session({
-    secret: process.env.SESSION_SECRET || "your_super_secret_key_here_please_change_me", // 秘密鍵。本番環境では環境変数から読み込むことを強く推奨
-    resave: false, // セッションが変更されなくてもセッションストアに保存し直すか
-    saveUninitialized: false, // 初期化されていない（変更されていない）セッションを保存するか
-    store: sessionStore, // カスタムセッションストアを使用
+// **セッションミドルウェアの設定**
+// これをインスタンス化して、ExpressとSocket.IOの両方で共有する
+const sessionMiddleware = session({
+    secret: process.env.SESSION_SECRET || "your_super_secret_key_here_please_change_me",
+    resave: false,
+    saveUninitialized: false,
+    store: sessionStore,
     cookie: {
-        maxAge: 1000 * 60 * 60 * 24, // 1日セッションを保持
-        httpOnly: true, // クライアント側のJavaScriptからCookieにアクセスできないようにする
-        secure: process.env.NODE_ENV === 'production' // HTTPSでのみCookieを送信（本番環境ではtrueにすべき）
+        maxAge: 1000 * 60 * 60 * 24,
+        httpOnly: true,
+        secure: process.env.NODE_ENV === 'production'
     }
-}));
+});
+app.use(sessionMiddleware); // Expressアプリケーションにセッションミドルウェアを適用
 
 // 認証チェックミドルウェア
-// `isAuthenticated`関数がtrueを返した場合のみ、次のミドルウェアまたはルートハンドラに進む
 function isAuthenticated(req, res, next) {
-    // entry.html, index.html, register.html, 認証API自体は認証なしでアクセスを許可
-    const publicPaths = ['/entry.html', '/index.html', '/register.html', '/login', '/register', '/check-auth'];
-    if (publicPaths.includes(req.path) || req.path.startsWith('/uploads/')) {
+    // 認証なしでアクセスを許可するパスのリスト
+    const publicPaths = [
+        '/', // ルートパス (index.htmlへリダイレクト)
+        '/index.html', // ログインページ
+        '/register.html', // 新規登録ページ
+        '/login',      // ログインAPI
+        '/register',   // 登録API
+        '/check-auth'  // 認証状態チェックAPI
+    ];
+
+    // 静的ファイルとして提供されるpublic/uploads内のファイルも認証なしでアクセス許可
+    if (req.path.startsWith('/uploads/')) {
+        return next();
+    }
+    
+    // publicPathsにあるか、かつそれがGETリクエストの場合、認証なしで許可
+    // chat.htmlもここに追加して、静的ファイル自体は誰でもアクセスできるようにする
+    // ただし、チャットの機能（メッセージ送信など）は認証が必要
+    if ((publicPaths.includes(req.path) || req.path === '/chat.html') && req.method === 'GET') {
         return next();
     }
 
+    // それ以外のリクエスト（POST /send-message, POST /upload など）でセッション認証をチェック
     if (req.session.isAuthenticated && req.session.userId) {
         next(); // 認証済みであれば続行
     } else {
         // 未認証の場合、ログインページへリダイレクト
-        res.redirect('/index.html');
+        console.log(`Access denied for ${req.path}. Redirecting to /index.html`);
+        // HTTPリクエストの場合はリダイレクト
+        if (req.headers['x-requested-with'] === 'XMLHttpRequest' || req.headers.accept && req.headers.accept.includes('application/json')) {
+            // AJAXリクエストの場合はJSONでエラーを返す
+            res.status(401).json({ success: false, message: "認証が必要です。" });
+        } else {
+            res.redirect('/index.html');
+        }
     }
 }
 app.use(isAuthenticated); // 全てのリクエストに認証チェックを適用
@@ -109,9 +132,9 @@ function savePinnedMessage(room, message) {
     fs.writeFileSync(PINNED_FILE, JSON.stringify(pinned, null, 2));
 }
 
-// ルートアクセス時に `entry.html` を提供
+// **ルートアクセス時に `index.html` を提供**
 app.get("/", (req, res) => {
-    res.sendFile(path.join(__dirname, "public", "entry.html"));
+    res.sendFile(path.join(__dirname, "public", "index.html"));
 });
 
 // ユーザー登録エンドポイント
@@ -123,11 +146,10 @@ app.post("/register", async (req, res) => {
     }
 
     try {
-        const hashedPassword = await bcrypt.hash(password, 10); // パスワードをハッシュ化（ソルトラウンド10）
+        const hashedPassword = await bcrypt.hash(password, 10);
 
         db.run("INSERT INTO users (username, password) VALUES (?, ?)", [username, hashedPassword], function(err) {
             if (err) {
-                // UNIQUE制約違反の場合（ユーザー名重複）
                 if (err.message.includes("UNIQUE constraint failed: users.username")) {
                     return res.status(409).json({ success: false, message: "このユーザー名は既に存在します。" });
                 }
@@ -159,9 +181,8 @@ app.post("/login", (req, res) => {
             return res.status(401).json({ success: false, message: "ユーザー名またはパスワードが違います。" });
         }
 
-        const isMatch = await bcrypt.compare(password, user.password); // パスワードの比較
+        const isMatch = await bcrypt.compare(password, user.password);
         if (isMatch) {
-            // ログイン成功: セッションにユーザー情報を保存
             req.session.userId = user.id;
             req.session.username = user.username;
             req.session.isAuthenticated = true;
@@ -174,7 +195,7 @@ app.post("/login", (req, res) => {
 
 // ログアウトエンドポイント
 app.post("/logout", (req, res) => {
-    req.session.destroy((err) => { // セッションを破棄
+    req.session.destroy((err) => {
         if (err) {
             console.error("Logout error:", err);
             return res.status(500).json({ success: false, message: "ログアウト中にエラーが発生しました。" });
@@ -194,10 +215,12 @@ app.get("/check-auth", (req, res) => {
 
 // メッセージ送信のAPIエンドポイント
 app.post("/send-message", (req, res) => {
-    // isAuthenticatedミドルウェアで認証済みであることを前提
     const { message, room } = req.body;
-    const username = req.session.username; // セッションからユーザー名を取得
+    const username = req.session.username;
 
+    if (!username) { // ここでもセッションからのユーザー名取得を確認
+        return res.status(401).json({ error: "認証されていません。" });
+    }
     if (!message.trim()) {
         return res.status(400).json({ error: "メッセージは空にできません。" });
     }
@@ -210,10 +233,13 @@ app.post("/send-message", (req, res) => {
 
 // メッセージ履歴の取得APIエンドポイント
 app.get("/messages", (req, res) => {
-    // isAuthenticatedミドルウェアで認証済みであることを前提
     const room = req.query.room;
     if (!room) {
         return res.status(400).json({ error: "roomパラメータが必要です。" });
+    }
+    // このエンドポイントは認証ミドルウェアで保護されているため、req.session.usernameは利用可能
+    if (!req.session.username) { //念の為の認証チェック
+        return res.status(401).json({ error: "認証されていません。" });
     }
 
     const messages = fs.existsSync(MESSAGE_FILE) ? JSON.parse(fs.readFileSync(MESSAGE_FILE, "utf-8")) : [];
@@ -222,9 +248,12 @@ app.get("/messages", (req, res) => {
 
 // ファイルアップロードのAPIエンドポイント
 app.post("/upload", (req, res) => {
-    // isAuthenticatedミドルウェアで認証済みであることを前提
-    const username = req.session.username; // セッションからユーザー名を取得
+    const username = req.session.username;
     const room = req.body.room;
+
+    if (!username) { // ここでもセッションからのユーザー名取得を確認
+        return res.status(401).json({ error: "認証されていません。" });
+    }
 
     if (!req.files || Object.keys(req.files).length === 0) {
         return res.status(400).json({ error: "No files were uploaded!" });
@@ -248,34 +277,41 @@ app.post("/upload", (req, res) => {
     });
 });
 
+// **Socket.IOの認証ミドルウェア**
+// ここで上記で作成した sessionMiddleware インスタンスをSocket.IOに適用
+io.use((socket, next) => {
+    sessionMiddleware(socket.request, {}, next);
+});
+
 // Socket.IOの処理
 io.on("connection", (socket) => {
     console.log("A user connected via Socket.IO");
 
-    // Socket.IO接続時にHTTPセッション情報を利用するための設定（オプション）
-    // 通常はHTTPリクエストで認証を完了し、そのセッション情報を利用する
-    // あるいはSocket.IO独自の認証フローを構築する
+    const session = socket.request.session;
+    if (session && session.isAuthenticated && session.username) {
+        socket.username = session.username;
+        console.log(`Socket connected for user: ${socket.username}`);
+    } else {
+        console.warn("Unauthenticated Socket.IO connection attempt. Disconnecting.");
+        socket.emit("redirect", "/index.html");
+        socket.disconnect(true);
+        return;
+    }
 
     socket.on("joinRoom", (data) => {
-        const { room, username } = data; // クライアントからユーザー名を渡してもらう
+        const { room } = data; // クライアントからroomのみ受け取る（usernameはセッションから取得済み）
         
-        // サーバー側のセッションから取得したユーザー名と、クライアントから渡されたユーザー名が一致するか確認する
-        // より堅牢な実装では、Socket.IO接続時にもセッションIDを渡し、サーバー側でセッションを復元して認証状態を確認するべきです。
-        // ここでは簡易的に、クライアントから正しいユーザー名が渡されたと仮定し、サーバー側のセッションがない場合はリダイレクトする。
-        // `isAuthenticated`ミドルウェアがHTTPリクエストを処理するため、Socket.IO接続時は既に`/chat.html`にアクセスできているはず
-        // そのため、ここでは基本的なルーム参加処理に集中します。
-
-        // 未認証で直接Socket.IO接続しようとした場合などのFallback
-        if (!username) {
-             socket.emit("redirect", "/index.html"); // 未認証ならログインページへリダイレクト
+        if (!socket.username) { // Socket.IO接続時に認証されていない場合
+             console.warn("User tried to join room without authentication via Socket.");
+             socket.emit("redirect", "/index.html");
+             socket.disconnect(true);
              return;
         }
 
         socket.join(room);
-        socket.username = username; // Socketオブジェクトにユーザー名を一時的に保存
-        socket.currentRoom = room; // 現在のルームも保存
+        socket.currentRoom = room;
 
-        console.log(`${username} joined room: ${room}`);
+        console.log(`${socket.username} joined room: ${room}`);
 
         const messages = fs.existsSync(MESSAGE_FILE) ? JSON.parse(fs.readFileSync(MESSAGE_FILE, "utf-8")) : [];
         socket.emit("messageHistory", messages.filter(m => m.room === room));
@@ -284,20 +320,18 @@ io.on("connection", (socket) => {
         if (pinned[room]) socket.emit("updatePinnedMessage", { message: pinned[room] });
     });
 
-    // ルームから離脱するイベントハンドラー
     socket.on("leaveRoom", (room) => {
         if (socket.currentRoom && socket.currentRoom === room) {
             socket.leave(room);
             console.log(`${socket.username || 'Unknown user'} left room: ${room}`);
-            socket.currentRoom = null; // 現在のルームをリセット
+            socket.currentRoom = null;
         }
     });
 
     socket.on("pinMessage", (data) => {
         const { message, room } = data;
-        // 認証されたユーザーのみピン留めできるようにする (Socket.IO接続時にユーザー名が設定されていることを前提)
         if (!socket.username) {
-            console.warn("Unauthenticated user tried to pin message.");
+            console.warn("Unauthenticated user tried to pin message via Socket.");
             return;
         }
         savePinnedMessage(room, message);
@@ -305,12 +339,11 @@ io.on("connection", (socket) => {
     });
 
     socket.on("unpinMessage", (room) => {
-        // 認証されたユーザーのみピン留め解除できるようにする
         if (!socket.username) {
-            console.warn("Unauthenticated user tried to unpin message.");
+            console.warn("Unauthenticated user tried to unpin message via Socket.");
             return;
         }
-        savePinnedMessage(room, null); // nullを保存してピン留めを解除
+        savePinnedMessage(room, null);
         io.to(room).emit("updatePinnedMessage", { message: null });
     });
 
