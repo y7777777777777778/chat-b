@@ -3,14 +3,26 @@
 <head>
     <meta charset="UTF-8">
     <title>個別ログイン</title>
+    <style>
+        body { font-family: sans-serif; display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 100vh; background-color: #f0f2f5; margin: 0; }
+        div { background-color: white; padding: 30px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); text-align: center; }
+        input { width: 100%; padding: 10px; margin-bottom: 15px; border: 1px solid #ddd; border-radius: 4px; box-sizing: border-box; }
+        button { width: 100%; padding: 10px; background-color: #3897f0; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 16px; margin-top: 10px; }
+        button:hover { background-color: #357ae8; }
+        a { color: #3897f0; text-decoration: none; }
+        a:hover { text-decoration: underline; }
+        p { margin-top: 20px; }
+    </style>
 </head>
 <body>
-    <h1>個別ログイン</h1>
-    <input type="text" id="username" placeholder="ユーザー名を入力" />
-    <input type="password" id="password" placeholder="パスワードを入力" />
-    <button onclick="login()">ログイン</button>
-    <p>アカウントがない方は <a href="register.html">新規登録</a> してください。</p>
-    <button onclick="guestLogin()">ゲストとして参加</button>
+    <div>
+        <h1>ログイン</h1>
+        <input type="text" id="username" placeholder="ユーザー名" required />
+        <input type="password" id="password" placeholder="パスワード" required />
+        <button onclick="login()">ログイン</button>
+        <p>アカウントをお持ちでない方は <a href="register.html">新規登録</a> してください。</p>
+        <button onclick="guestLogin()">ゲストとして参加</button>
+    </div>
 
     <script>
         async function login() {
@@ -26,7 +38,9 @@
                 const result = await response.json();
 
                 if (result.success) {
-                    localStorage.setItem("authenticated", "true");
+                    // サーバーからの認証成功時、セッションはサーバー側で管理される
+                    // クライアント側では認証済みであることだけを示すフラグをセット
+                    localStorage.setItem("authenticated", "true"); 
                     localStorage.setItem("username", result.username); // サーバーから返されたユーザー名
                     localStorage.setItem("userId", result.userId);     // サーバーから返されたユーザーID
                     window.location.href = "chat.html";
@@ -42,6 +56,9 @@
         function guestLogin() {
             // ゲストログインはサーバーへの認証リクエストは不要
             // chat.htmlに?guest=trueをつけてアクセスし、chat.html側でセッションとユーザーIDを管理
+            localStorage.setItem("authenticated", "false"); // ゲストなのでfalse
+            localStorage.removeItem("username"); // 明示的にクリア
+            localStorage.removeItem("userId");   // 明示的にクリア
             window.location.href = "chat.html?guest=true";
         }
     </script>
