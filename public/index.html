@@ -64,6 +64,12 @@
         a:hover {
             text-decoration: underline;
         }
+        #guest-button { /* ゲストログインボタンのスタイル */
+            background-color: #6c757d; /* 灰色系の色 */
+        }
+        #guest-button:hover {
+            background-color: #5a6268;
+        }
     </style>
 </head>
 <body>
@@ -73,28 +79,27 @@
         <input type="password" id="password" placeholder="パスワードを入力" required />
         <button onclick="login()">ログイン</button>
         <p>アカウントがない方は <a href="register.html">新規登録</a> してください。</p>
+        <hr style="margin: 20px 0; border: none; border-top: 1px solid #eee;"> <button id="guest-button" onclick="guestLogin()">ログインせずに参加 (ゲスト)</button>
     </div>
 
     <script>
         // ページロード時に認証状態をチェック
         window.onload = async () => {
             try {
-                // **キャッシュを無効化するクエリパラメータを追加**
+                // キャッシュを無効化するクエリパラメータを追加
                 const response = await fetch(`/check-auth?t=${new Date().getTime()}`);
                 const result = await response.json();
                 if (result.authenticated) {
                     // 既に認証済みならチャットページへリダイレクト
                     window.location.href = "chat.html";
                 } else {
-                    // URLにリダイレクトフラグがあればアラートを出す
                     const urlParams = new URLSearchParams(window.location.search);
                     if (urlParams.get('redirected') === 'true') {
-                        // alert("認証が必要です。ログインページにリダイレクトされました。"); // コメントアウトして非表示に
+                        // alert("認証が必要です。ログインページにリダイレクトされました。"); // 不要な場合はコメントアウト
                     }
                 }
             } catch (error) {
                 console.error("認証チェックエラー:", error);
-                // エラーの場合も何もしない（未認証状態として扱う）
             }
         };
 
@@ -124,6 +129,27 @@
             } catch (error) {
                 console.error("ログインエラー:", error);
                 alert("ログイン中にエラーが発生しました。");
+            }
+        }
+
+        async function guestLogin() {
+            try {
+                const response = await fetch("/guest-login", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({}), // ゲストログインはbodyは不要だが、空のオブジェクトを送信
+                });
+                const result = await response.json();
+
+                if (result.success) {
+                    alert(result.message);
+                    window.location.href = "chat.html";
+                } else {
+                    alert("ゲストログイン失敗: " + result.message);
+                }
+            } catch (error) {
+                console.error("ゲストログインエラー:", error);
+                alert("ゲストログイン中にエラーが発生しました。");
             }
         }
     </script>
