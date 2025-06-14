@@ -2,7 +2,7 @@
 <html lang="ja">
 <head>
     <meta charset="UTF-8">
-    <title>個別ログイン</title>
+    <title>ログイン</title>
     <style>
         body { font-family: sans-serif; display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 100vh; background-color: #f0f2f5; margin: 0; }
         div { background-color: white; padding: 30px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); text-align: center; }
@@ -38,11 +38,9 @@
                 const result = await response.json();
 
                 if (result.success) {
-                    // サーバーからの認証成功時、セッションはサーバー側で管理される
-                    // クライアント側では認証済みであることだけを示すフラグをセット
                     localStorage.setItem("authenticated", "true"); 
-                    localStorage.setItem("username", result.username); // サーバーから返されたユーザー名
-                    localStorage.setItem("userId", result.userId);     // サーバーから返されたユーザーID
+                    localStorage.setItem("username", result.username);
+                    localStorage.setItem("userId", result.userId);
                     window.location.href = "chat.html";
                 } else {
                     alert(`ログインに失敗しました: ${result.message}`);
@@ -54,11 +52,9 @@
         }
 
         function guestLogin() {
-            // ゲストログインはサーバーへの認証リクエストは不要
-            // chat.htmlに?guest=trueをつけてアクセスし、chat.html側でセッションとユーザーIDを管理
-            localStorage.setItem("authenticated", "false"); // ゲストなのでfalse
-            localStorage.removeItem("username"); // 明示的にクリア
-            localStorage.removeItem("userId");   // 明示的にクリア
+            localStorage.setItem("authenticated", "false");
+            localStorage.removeItem("username");
+            localStorage.removeItem("userId");
             window.location.href = "chat.html?guest=true";
         }
     </script>
