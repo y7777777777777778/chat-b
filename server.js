@@ -16,7 +16,7 @@ app.use(
     secret: "your-secret-key-super-secret", // 任意の強力な文字列に変更してください
     resave: false,
     saveUninitialized: true,
-    cookie: { secure: false }, // HTTPSを使用しない場合はfalseに設定
+    cookie: { secure: false }, // HTTPSを使用しない場合はfalseに設定 (RenderはHTTPSなのでtrueにするべきですが、今回はテスト用にfalseを維持)
   })
 );
 
@@ -94,15 +94,13 @@ app.get("/chat.html", (req, res) => {
 // ログインAPI
 app.post("/login", (req, res) => {
   const { username, password } = req.body;
+  // ここでは簡略化のため、ユーザー名とパスワードをハードコード
   // 実際にはデータベースなどでユーザー認証を行う
-  // ここでは簡略化のため、登録ユーザーの情報をセッションに保存
-  // (本来はサーバーサイドで管理すべき)
-  // クライアントから渡されたusername/passwordと、サーバーが認識する
-  // 登録済みユーザー（例: registeredUser/registeredPassword）を比較
-  if (username === "registeredUser" && password === "registeredPassword") {
+  if (username === "user1" && password === "pass1") { // 例: ユーザー名「user1」、パスワード「pass1」
     req.session.authenticated = "true";
     req.session.username = username;
-    req.session.userId = uuidv4(); // ログインユーザーにも新しいuserIdを割り当てる
+    // ログインユーザーにも新しいuserIdを割り当てるか、既存のものを利用（ここでは新しく割り当て）
+    req.session.userId = uuidv4(); 
     console.log("User logged in:", username, "UserId:", req.session.userId);
     res.json({ success: true, username: username, userId: req.session.userId });
   } else {
@@ -123,9 +121,6 @@ app.post("/change-username", (req, res) => {
   req.session.username = newUsername;
   console.log(`Username changed from ${oldUsername} to ${newUsername} for userId: ${req.session.userId}`);
 
-  // Socket.IOに接続しているソケットのユーザー名も更新（リアルタイム反映のため）
-  // ただし、直接io.socketsを操作するのではなく、クライアント側でjoinRoomを再発行させる方が安全
-  // あるいは、updateUserListを呼び出して全クライアントに更新させる
   updateUserList(); // ユーザーリストを更新して、全クライアントに新しいユーザー名を通知
 
   res.json({ success: true, newUsername: newUsername });
@@ -133,7 +128,7 @@ app.post("/change-username", (req, res) => {
 
 // メッセージ送信API
 app.post("/send-message", (req, res) => {
-  const { message, room, dmTargetUser, dmTargetUserId } = req.body; // usernameはセッションから取得
+  const { message, room, dmTargetUser, dmTargetUserId } = req.body; 
   if (!message.trim()) {
     return res.status(400).json({ success: false, message: "メッセージは空にできません。" });
   }
@@ -141,7 +136,7 @@ app.post("/send-message", (req, res) => {
   // 送信者のuserIdをセッションから取得
   const senderUserId = req.session.userId;
   // 送信者のusernameをセッションから取得
-  const senderUsername = req.session.username; // セッションに保存されているユーザー名を使用
+  const senderUsername = req.session.username; 
 
   if (!senderUsername || !senderUserId) {
       return res.status(401).json({ success: false, message: "ユーザー情報が取得できません。再ログインしてください。" });
@@ -162,8 +157,7 @@ app.post("/send-message", (req, res) => {
     messageData.dmTargetUser = dmTargetUser;
     messageData.dmTargetUserId = dmTargetUserId;
 
-    // 送信者と受信者両方にDMを送信
-    // io.to(userId) は、そのuserIdをroomとしてjoinしている全てのソケットに送信
+    // 送信者と受信者両方にDMを送信 (ソケットIDではなくユーザーIDのルームに送信)
     io.to(dmTargetUserId).emit("message", messageData);
     if (senderUserId !== dmTargetUserId) { // 自分自身へのDMでなければ
       io.to(senderUserId).emit("message", messageData);
@@ -254,13 +248,14 @@ io.on("connection", (socket) => {
         console.log(`${socket.username} (${socket.userId}) left room ${socket.currentRoom}`);
     }
     // 以前紐付いていたuserIdのルームから離脱（ユーザー名変更時など）
+    // socket.userIdが以前のuserIdで、かつ現在のuserIdと異なる場合に離脱
     if (socket.userId && socket.userId !== userId) {
         socket.leave(socket.userId);
         console.log(`Socket ${socket.id} left old userId room ${socket.userId}`);
     }
 
     socket.join(room); // 一般チャットルームへの参加
-    socket.join(userId); // 個別ユーザー宛のルームとしてuserIdを使用
+    socket.join(userId); // 個別ユーザー宛のルームとしてuserIdを使用 (これによりDM送信が可能に)
 
     socket.username = username; // socketオブジェクトにユーザー名を保存
     socket.userId = userId;     // socketオブジェクトにユーザーIDを保存
@@ -307,6 +302,7 @@ io.on("connection", (socket) => {
   socket.on("disconnect", () => {
     console.log("ユーザーが切断しました:", socket.id, "Username:", socket.username, "UserId:", socket.userId);
     // 切断時に参加していたルームとユーザーIDのルームから離脱
+    // socket.userIdが設定されている場合のみ離脱処理を行う
     if (socket.currentRoom) {
       socket.leave(socket.currentRoom);
     }
@@ -325,17 +321,15 @@ function updateUserList() {
   // 全ての接続されているソケットを走査
   for (let [id, socket] of io.of("/").sockets) {
     // socket.username と socket.userId が設定されているソケットのみを対象
-    if (socket.username && socket.userId) {
-      // 既にこのuserIdがリストに追加されていないかチェック
-      if (!uniqueUserIds.has(socket.userId)) {
-        users.push({ username: socket.username, userId: socket.userId });
-        uniqueUserIds.add(socket.userId);
-      }
+    // そして、まだリストに追加されていないuserIdのみを追加
+    if (socket.username && socket.userId && !uniqueUserIds.has(socket.userId)) {
+      users.push({ username: socket.username, userId: socket.userId });
+      uniqueUserIds.add(socket.userId);
     }
   }
   // 全クライアントに更新されたユーザーリストを送信
   io.emit("updateUserList", users);
-  console.log("Updated user list:", users.map(u => `${u.username}(${u.userId.substring(0,4)}...)`).join(", "));
+  console.log("Updated user list:", users.map(u => `${u.username}(${u.userId ? u.userId.substring(0,4) : 'N/A'}...)`).join(", "));
 }
 
 const PORT = process.env.PORT || 3000;
