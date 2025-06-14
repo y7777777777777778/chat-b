@@ -11,14 +11,14 @@ const server = require("http").createServer(app);
 const io = new Server(server);
 
 // セッションミドルウェアの設定
-app.use(
-  session({
-    secret: "your-secret-key-super-secret", // 任意の強力な文字列に変更してください
-    resave: false,
-    saveUninitialized: true,
-    cookie: { secure: false }, // RenderはHTTPSなのでtrueにするべきですが、開発中はfalseでも可
-  })
-);
+const sessionMiddleware = session({
+  secret: "your-secret-key-super-secret", // !!! ここは必ずユニークな強い文字列に変更してください !!!
+  resave: false,
+  saveUninitialized: true,
+  cookie: { secure: true } // Renderにデプロイする場合、HTTPSなのでtrueに設定
+});
+
+app.use(sessionMiddleware); // Expressにセッションミドルウェアを適用
 
 app.use(express.json());
 app.use(express.static("public"));
@@ -371,15 +371,32 @@ app.post("/upload", isAuthenticated, (req, res) => {
   }
 });
 
+// Socket.IOにExpressのセッションミドルウェアを共有する
+// これにより、Socket.IOのハンドシェイク時にセッション情報がsocket.request.sessionとして利用可能になります。
+io.engine.use(sessionMiddleware); // ここが追加・修正された主要な部分です
 
 // Socket.IOの処理
 io.on("connection", (socket) => {
   console.log("新しいユーザーが接続しました:", socket.id);
 
   // セッション情報をソケットに紐付ける
+  // socket.request.session が確実に存在することを期待します
   const session = socket.request.session;
-  socket.username = session.username;
-  socket.userId = session.userId; // ログインユーザーまたはゲストのuserId
+
+  // セッション情報が期待通りに取得できない場合のフォールバックやエラーハンドリング
+  if (!session || !session.username || !session.userId) {
+      console.warn("Socket.IO接続時にセッション情報が不完全です。ゲストとして処理を試みます。");
+      // ユーザーが認証されていない場合やセッション情報が不足している場合のフォールバック
+      // この場合、`socket.username`と`socket.userId`を一時的に設定し、
+      // 適切なアクセス制限をクライアント側でも行う必要があります。
+      // もしこれがログイン後のユーザーであれば、認証ミドルウェアが正しく動作していない可能性もあります。
+      socket.username = `不明なユーザー-${socket.id.substring(0, 4)}`; // 暫定的なユーザー名
+      socket.userId = uuidv4(); // 新しいIDを割り当てる
+  } else {
+      socket.username = session.username;
+      socket.userId = session.userId;
+  }
+  
 
   // 接続時に自身のuserIdをルームとして参加させる（DM受信のため）
   if (socket.userId) {
