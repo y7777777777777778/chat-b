@@ -438,7 +438,7 @@
         } else if (["mp3", "wav", "ogg"].includes(fileExtension)) {
           content = `<audio controls src="${msg.file}"></audio>`;
         } else {
-          content = `<a href="<span class="math-inline">\{msg\.file\}" target\="\_blank" download\></span>{msg.file.split("/").pop()}</a>`;
+          content = `<a href="${msg.file}" target="_blank" download>${msg.file.split("/").pop()}</a>`;
         }
       }
 
@@ -458,8 +458,8 @@
       messageDiv.innerHTML = `
         <div class="message-content">
           <div class="message-user">${userDisplayName}</div>
-          <span class="math-inline">\{content\}
-<div class\="message\-time"\></span>{timestamp}</div>
+          ${content}
+          <div class="message-time">${timestamp}</div>
         </div>
       `;
       chatMessages.appendChild(messageDiv);
@@ -490,4 +490,224 @@
             if (result.success) {
                 username = result.newUsername;
                 localStorage.setItem("username", username);
-                document.getElementById("
+                document.getElementById("usernameDisplay").textContent = `現在のユーザー: ${username}`;
+                alert(`ユーザー名が「${username}」に変更されました！`);
+                // ユーザーリストも更新されるようにソケットイベントを再送信
+                // socket.emit("joinRoom", currentRoom, username, userId); // サーバー側でupdateUserListが呼ばれるため不要だが、念のため残すことも可
+            } else {
+                alert(`ユーザー名変更に失敗しました: ${result.message}`);
+            }
+        } catch (error) {
+            console.error("ユーザー名変更エラー:", error);
+            alert("ユーザー名変更中に問題が発生しました！💥");
+        }
+    });
+
+
+    // ルーム切り替え
+    document.querySelectorAll(".room-button").forEach((button) => {
+      button.addEventListener("click", () => {
+        const newRoom = button.dataset.room;
+        if (newRoom !== currentRoom) {
+          currentRoom = newRoom;
+          localStorage.setItem("currentRoom", currentRoom);
+          document.getElementById("roomTitle").textContent = currentRoom;
+          document.getElementById("chat-messages").innerHTML = ""; // メッセージクリア
+          fetchMessages(); // 新しいルームのメッセージをロード
+          currentDmTarget = null; // ルーム切り替えでDMターゲットをクリア
+          updateDmTargetDisplay();
+          console.log(`ルームを "${newRoom}" に切り替えました。`);
+        }
+      });
+    });
+
+    // DM解除ボタン
+    document.getElementById("dmClearButton").addEventListener("click", () => {
+        currentDmTarget = null;
+        updateDmTargetDisplay();
+        console.log("DMターゲットを解除しました。");
+    });
+
+    function updateDmTargetDisplay() {
+        const dmTargetDisplay = document.getElementById("dmTargetDisplay");
+        const dmClearButton = document.getElementById("dmClearButton");
+        if (currentDmTarget) {
+            dmTargetDisplay.textContent = `DM相手: ${currentDmTarget.username}`;
+            dmClearButton.style.display = "inline-block";
+        } else {
+            dmTargetDisplay.textContent = "";
+            dmClearButton.style.display = "none";
+        }
+    }
+
+
+    socket.on("messageHistory", (messages) => {
+      const chatMessages = document.getElementById("chat-messages");
+      chatMessages.innerHTML = ""; // 既存のメッセージをクリア
+      // DMメッセージの場合、自分宛か自分が送信したもののみ表示
+      messages.filter(msg => {
+          if (msg.dm) {
+              return msg.userId === userId || msg.dmTargetUserId === userId;
+          }
+          return msg.room === currentRoom; // 通常メッセージは現在のルームのものを表示
+      }).forEach((msg) => addMessageToChatBox(msg));
+      console.log("メッセージ履歴をロードしました。");
+    });
+
+    socket.on("message", (msg) => {
+        if (msg.dm) {
+            // DMメッセージの場合、自分宛か自分が送信したもののみ表示
+            if (msg.userId === userId || msg.dmTargetUserId === userId) {
+                addMessageToChatBox(msg);
+                console.log("新しいDMを受信しました:", msg);
+            }
+        } else if (msg.room === currentRoom) {
+            // 通常のルームメッセージの場合
+            addMessageToChatBox(msg);
+            console.log("新しいルームメッセージを受信しました:", msg);
+        }
+    });
+
+    socket.on("updatePinnedMessage", (data) => {
+      const pinnedMessageDiv = document.getElementById("pinnedMessage");
+      const pinnedMessageContent = document.getElementById("pinnedMessageContent");
+      const unpinButton = document.getElementById("unpinButton");
+
+      if (data.message) {
+        pinnedMessageContent.innerHTML = `${data.message.user}: ${data.message.text || `<a href="${data.message.file}" target="_blank">${data.message.file.split("/").pop()}</a>`}`;
+        pinnedMessageDiv.style.display = "block";
+        unpinButton.onclick = () => {
+          socket.emit("unpinMessage", currentRoom);
+        };
+        console.log("ピン留めメッセージが更新されました:", data.message);
+      } else {
+        pinnedMessageDiv.style.display = "none";
+        pinnedMessageContent.innerHTML = "";
+        console.log("ピン留めメッセージが解除されました。");
+      }
+    });
+
+    // ユーザーリスト関連
+    const userListButton = document.getElementById("userListButton");
+    const userListDropdown = document.getElementById("userListDropdown");
+
+    userListButton.addEventListener("click", (event) => {
+        event.stopPropagation(); // ドキュメントクリックイベントが発火しないように
+        userListDropdown.style.display = userListDropdown.style.display === "none" ? "block" : "none";
+    });
+
+    // ドロップダウン外をクリックしたら閉じる
+    document.addEventListener("click", (event) => {
+        if (!userListDropdown.contains(event.target) && event.target !== userListButton) {
+            userListDropdown.style.display = "none";
+        }
+    });
+
+    socket.on("updateUserList", (users) => {
+        userListDropdown.innerHTML = ""; // 既存のリストをクリア
+        // ユーザー名でソート
+        users.sort((a, b) => a.username.localeCompare(b.username));
+
+        users.forEach(user => {
+            // 自分自身はリストに表示しないが、DM対象として選択できるようにする
+            // if (user.userId !== userId) { // この条件は削除し、自分自身もリストに表示可能にする
+                const listItem = document.createElement("li");
+                listItem.textContent = user.username + (user.userId === userId ? " (自分)" : ""); // 自分自身には「(自分)」と表示
+                listItem.addEventListener("click", () => {
+                    if (user.userId !== userId) { // 自分自身にはDMできないようにする
+                        currentDmTarget = user; // DMターゲットを設定
+                        updateDmTargetDisplay();
+                        userListDropdown.style.display = "none"; // ドロップダウンを閉じる
+                        alert(`${user.username} さんにDMを送信します。`);
+                        console.log("DMターゲットを設定しました:", user);
+                    } else {
+                        alert("自分自身にDMは送れません。");
+                    }
+                });
+                userListDropdown.appendChild(listItem);
+            // }
+        });
+        console.log("オンラインユーザーリストが更新されました:", users.map(u => u.username));
+    });
+
+    // メッセージ送信
+    document.getElementById("send-button").addEventListener("click", () => {
+      const messageInput = document.getElementById("message-input");
+      const message = messageInput.value;
+      if (!message.trim()) return;
+
+      const messageData = {
+        message,
+        room: currentRoom,
+      };
+
+      if (currentDmTarget) {
+          messageData.dmTargetUser = currentDmTarget.username;
+          messageData.dmTargetUserId = currentDmTarget.userId;
+      }
+
+      fetch("/send-message", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(messageData),
+      }).then(response => response.json()) // JSONレスポンスをパース
+        .then(result => {
+            if (result.success) {
+                messageInput.value = "";
+                console.log("メッセージ送信成功。");
+            } else {
+                alert(`メッセージ送信に失敗しました: ${result.message}`);
+                console.error("メッセージ送信失敗:", result.message);
+            }
+        })
+        .catch(error => {
+            console.error("メッセージ送信エラー:", error);
+            alert("メッセージ送信中に問題が発生しました！💥");
+        });
+    });
+
+    // ファイル送信
+    document.getElementById("send-file-button").addEventListener("click", async () => {
+      const fileInput = document.getElementById("fileInput").files[0];
+      if (!fileInput) {
+        alert("ファイルを選択してください！");
+        return;
+      }
+
+      const formData = new FormData();
+      formData.append("file", fileInput);
+      formData.append("room", currentRoom);
+
+      if (currentDmTarget) {
+          formData.append("dmTargetUser", currentDmTarget.username);
+          formData.append("dmTargetUserId", currentDmTarget.userId);
+      }
+
+      try {
+        const response = await fetch("/upload", {
+          method: "POST",
+          body: formData,
+        });
+        const result = await response.json();
+        if (result.success) {
+          console.log("ファイル送信成功。");
+        } else {
+          alert("ファイル送信に失敗しました！💥");
+          console.error("ファイル送信失敗:", result.error);
+        }
+      } catch (error) {
+        console.error("ファイル送信エラー:", error);
+        alert("ファイル送信中に問題が発生しました！💥");
+      }
+    });
+
+    // ページロード時の初期化
+    window.onload = () => {
+      document.getElementById("roomTitle").textContent = currentRoom;
+      fetchMessages(); // 初期ルームのメッセージ履歴をロード
+      updateDmTargetDisplay(); // ページロード時にDMターゲット表示を初期化
+      console.log("chat.html がロードされました。");
+    };
+  </script>
+</body>
+</html>
