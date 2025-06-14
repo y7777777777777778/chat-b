@@ -73,9 +73,8 @@ const sessionMiddleware = session({
     saveUninitialized: false,
     store: sessionStore,
     cookie: {
-        maxAge: 1000 * 60 * 60 * 24,
+        maxAge: 1000 * 60 * 60 * 24, // 24時間
         httpOnly: true,
-        // **ここを修正・確認**
         secure: true, // HTTPS経由でのみクッキーを送信
         sameSite: 'None' // クロスサイトリクエストでクッキーを送信
     },
@@ -87,14 +86,15 @@ app.use(sessionMiddleware);
 function isAuthenticated(req, res, next) {
     const alwaysPublicPaths = [
         '/login',
-        '/register'
+        '/register',
+        '/guest-login' // ゲストログインも認証不要
     ];
 
     const publicGetPaths = [
         '/',
         '/index.html',
         '/register.html',
-        '/chat.html', // chat.html自体は公開だが、中のfetchは認証される
+        '/chat.html',
         '/check-auth'
     ];
 
@@ -110,7 +110,7 @@ function isAuthenticated(req, res, next) {
         return next();
     }
 
-    if (req.session.isAuthenticated && req.session.userId) {
+    if (req.session.isAuthenticated && req.session.username) {
         next();
     } else {
         console.log(`Access denied for ${req.method} ${req.path}. Redirecting to /index.html`);
@@ -202,6 +202,24 @@ app.post("/login", (req, res) => {
         } else {
             res.status(401).json({ success: false, message: "ユーザー名またはパスワードが違います。" });
         }
+    });
+});
+
+// ゲストログインエンドポイントをここに追加
+app.post("/guest-login", (req, res) => {
+    // ユニークなゲスト名を生成 (例: ゲスト_ランダムな4桁の数字)
+    const guestUsername = "ゲスト_" + Math.floor(1000 + Math.random() * 9000);
+
+    req.session.userId = null; // ゲストなのでDBのIDはなし
+    req.session.username = guestUsername;
+    req.session.isAuthenticated = true;
+
+    req.session.save((err) => {
+        if (err) {
+            console.error("Session save error after guest login:", err);
+            return res.status(500).json({ success: false, message: "ゲストログイン中にセッション保存エラーが発生しました。" });
+        }
+        res.json({ success: true, message: "ゲストとして参加しました！", username: guestUsername });
     });
 });
 
@@ -309,7 +327,7 @@ io.on("connection", (socket) => {
     } else {
         console.warn("Unauthenticated Socket.IO connection attempt. Disconnecting.");
         socket.emit("redirect", "/index.html"); // クライアントにリダイレクトを指示
-        socket.disconnect(true); // 元に戻す
+        socket.disconnect(true);
         return;
     }
 
