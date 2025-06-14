@@ -1,3 +1,4 @@
+
 const fs = require("fs");
 const path = require("path");
 const express = require("express");
@@ -25,10 +26,12 @@ if (!fs.existsSync(UPLOAD_DIR)) {
     fs.mkdirSync(UPLOAD_DIR, { recursive: true });
 }
 
-// **SQLiteデータベースの初期化**
-const db = new sqlite3.Database("./chat.db", (err) => {
+// **SQLiteデータベースの初期化とテーブル作成**
+const dbPath = "./chat.db";
+const db = new sqlite3.Database(dbPath, sqlite3.OPEN_READWRITE | sqlite3.OPEN_CREATE, (err) => {
     if (err) {
         console.error("Database connection error:", err.message);
+        process.exit(1);
     } else {
         console.log("Connected to the SQLite database.");
         db.run(`CREATE TABLE IF NOT EXISTS users (
@@ -38,6 +41,7 @@ const db = new sqlite3.Database("./chat.db", (err) => {
         )`, (err) => {
             if (err) {
                 console.error("Error creating users table:", err.message);
+                process.exit(1);
             } else {
                 console.log("Users table ensured.");
             }
@@ -49,7 +53,7 @@ const db = new sqlite3.Database("./chat.db", (err) => {
 const knex = Knex({
     client: "sqlite3",
     connection: {
-        filename: "./chat.db",
+        filename: dbPath,
     },
     useNullAsDefault: true,
 });
@@ -60,63 +64,69 @@ const sessionStore = new KnexSessionStore({
     sidfieldname: "sid",
     knex: knex,
     createtable: true,
+    clearInterval: 1000 * 60 * 60
 });
 
-// **セッションミドルウェアの設定**
-// これをインスタンス化して、ExpressとSocket.IOの両方で共有する
+// セッションミドルウェアの設定
 const sessionMiddleware = session({
-    secret: process.env.SESSION_SECRET || "your_super_secret_key_here_please_change_me",
+    secret: process.env.SESSION_SECRET || "your_super_secret_key_here_please_change_me_and_make_it_long_and_random",
     resave: false,
     saveUninitialized: false,
     store: sessionStore,
     cookie: {
         maxAge: 1000 * 60 * 60 * 24,
         httpOnly: true,
-        secure: process.env.NODE_ENV === 'production'
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: 'Lax'
     }
 });
-app.use(sessionMiddleware); // Expressアプリケーションにセッションミドルウェアを適用
+app.use(sessionMiddleware);
 
-// 認証チェックミドルウェア
+// **認証チェックミドルウェア**
 function isAuthenticated(req, res, next) {
-    // 認証なしでアクセスを許可するパスのリスト
-    const publicPaths = [
-        '/', // ルートパス (index.htmlへリダイレクト)
-        '/index.html', // ログインページ
-        '/register.html', // 新規登録ページ
-        '/login',      // ログインAPI
-        '/register',   // 登録API
-        '/check-auth'  // 認証状態チェックAPI
+    // 常に認証なしでアクセスを許可するパス（ログイン/登録のPOSTリクエストを含む）
+    const alwaysPublicPaths = [
+        '/login',
+        '/register'
     ];
 
-    // 静的ファイルとして提供されるpublic/uploads内のファイルも認証なしでアクセス許可
+    // GETリクエストでのみ認証なしでアクセスを許可するパス（HTMLファイル、認証状態チェック）
+    const publicGetPaths = [
+        '/',
+        '/index.html',
+        '/register.html',
+        '/chat.html',
+        '/check-auth'
+    ];
+
+    // ログインと登録のPOSTリクエストは認証不要
+    if (alwaysPublicPaths.includes(req.path) && req.method === 'POST') {
+        return next();
+    }
+
+    // 公開されているHTMLファイルや認証チェックのGETリクエストは認証不要
+    if (publicGetPaths.includes(req.path) && req.method === 'GET') {
+        return next();
+    }
+
+    // アップロードされた静的ファイルも認証不要
     if (req.path.startsWith('/uploads/')) {
         return next();
     }
-    
-    // publicPathsにあるか、かつそれがGETリクエストの場合、認証なしで許可
-    // chat.htmlもここに追加して、静的ファイル自体は誰でもアクセスできるようにする
-    // ただし、チャットの機能（メッセージ送信など）は認証が必要
-    if ((publicPaths.includes(req.path) || req.path === '/chat.html') && req.method === 'GET') {
-        return next();
-    }
 
-    // それ以外のリクエスト（POST /send-message, POST /upload など）でセッション認証をチェック
+    // 上記以外の全てのリクエストは認証が必要
     if (req.session.isAuthenticated && req.session.userId) {
-        next(); // 認証済みであれば続行
+        next();
     } else {
-        // 未認証の場合、ログインページへリダイレクト
-        console.log(`Access denied for ${req.path}. Redirecting to /index.html`);
-        // HTTPリクエストの場合はリダイレクト
-        if (req.headers['x-requested-with'] === 'XMLHttpRequest' || req.headers.accept && req.headers.accept.includes('application/json')) {
-            // AJAXリクエストの場合はJSONでエラーを返す
+        console.log(`Access denied for ${req.method} ${req.path}. Redirecting to /index.html`);
+        if (req.xhr || (req.headers.accept && req.headers.accept.includes('application/json'))) {
             res.status(401).json({ success: false, message: "認証が必要です。" });
         } else {
             res.redirect('/index.html');
         }
     }
 }
-app.use(isAuthenticated); // 全てのリクエストに認証チェックを適用
+app.use(isAuthenticated);
 
 // メッセージを保存
 function saveMessage(data) {
@@ -132,7 +142,7 @@ function savePinnedMessage(room, message) {
     fs.writeFileSync(PINNED_FILE, JSON.stringify(pinned, null, 2));
 }
 
-// **ルートアクセス時に `index.html` を提供**
+// ルートアクセス時に `index.html` を提供
 app.get("/", (req, res) => {
     res.sendFile(path.join(__dirname, "public", "index.html"));
 });
@@ -153,13 +163,13 @@ app.post("/register", async (req, res) => {
                 if (err.message.includes("UNIQUE constraint failed: users.username")) {
                     return res.status(409).json({ success: false, message: "このユーザー名は既に存在します。" });
                 }
-                console.error("Registration error:", err.message);
+                console.error("Registration DB error:", err.message);
                 return res.status(500).json({ success: false, message: "登録中にエラーが発生しました。" });
             }
             res.json({ success: true, message: "登録が完了しました。" });
         });
     } catch (error) {
-        console.error("Hashing error:", error);
+        console.error("Hashing or Registration general error:", error);
         res.status(500).json({ success: false, message: "サーバーエラーが発生しました。" });
     }
 });
@@ -174,7 +184,7 @@ app.post("/login", (req, res) => {
 
     db.get("SELECT * FROM users WHERE username = ?", [username], async (err, user) => {
         if (err) {
-            console.error("Login error (DB query):", err.message);
+            console.error("Login DB query error:", err.message);
             return res.status(500).json({ success: false, message: "サーバーエラーが発生しました。" });
         }
         if (!user) {
@@ -197,7 +207,7 @@ app.post("/login", (req, res) => {
 app.post("/logout", (req, res) => {
     req.session.destroy((err) => {
         if (err) {
-            console.error("Logout error:", err);
+            console.error("Logout session destroy error:", err);
             return res.status(500).json({ success: false, message: "ログアウト中にエラーが発生しました。" });
         }
         res.json({ success: true, message: "ログアウトしました。" });
@@ -218,7 +228,7 @@ app.post("/send-message", (req, res) => {
     const { message, room } = req.body;
     const username = req.session.username;
 
-    if (!username) { // ここでもセッションからのユーザー名取得を確認
+    if (!username) {
         return res.status(401).json({ error: "認証されていません。" });
     }
     if (!message.trim()) {
@@ -237,8 +247,7 @@ app.get("/messages", (req, res) => {
     if (!room) {
         return res.status(400).json({ error: "roomパラメータが必要です。" });
     }
-    // このエンドポイントは認証ミドルウェアで保護されているため、req.session.usernameは利用可能
-    if (!req.session.username) { //念の為の認証チェック
+    if (!req.session.username) {
         return res.status(401).json({ error: "認証されていません。" });
     }
 
@@ -251,7 +260,7 @@ app.post("/upload", (req, res) => {
     const username = req.session.username;
     const room = req.body.room;
 
-    if (!username) { // ここでもセッションからのユーザー名取得を確認
+    if (!username) {
         return res.status(401).json({ error: "認証されていません。" });
     }
 
@@ -277,8 +286,7 @@ app.post("/upload", (req, res) => {
     });
 });
 
-// **Socket.IOの認証ミドルウェア**
-// ここで上記で作成した sessionMiddleware インスタンスをSocket.IOに適用
+// Socket.IOの認証ミドルウェア
 io.use((socket, next) => {
     sessionMiddleware(socket.request, {}, next);
 });
@@ -299,9 +307,9 @@ io.on("connection", (socket) => {
     }
 
     socket.on("joinRoom", (data) => {
-        const { room } = data; // クライアントからroomのみ受け取る（usernameはセッションから取得済み）
+        const { room } = data;
         
-        if (!socket.username) { // Socket.IO接続時に認証されていない場合
+        if (!socket.username) {
              console.warn("User tried to join room without authentication via Socket.");
              socket.emit("redirect", "/index.html");
              socket.disconnect(true);
