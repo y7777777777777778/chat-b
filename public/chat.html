@@ -2,7 +2,7 @@
 <html lang="ja">
 <head>
   <meta charset="UTF-8" />
-  <title>チャットルーム</title>
+  <title>インスタ風チャットルーム</title>
   <script src="/socket.io/socket.io.js"></script>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <link href="https://fonts.googleapis.com/css2?family=Poppins&display=swap" rel="stylesheet" />
@@ -610,12 +610,12 @@
 
         } else {
           // 認証されていない場合はログインページへリダイレクト
-          window.location.href = "/entry.html";
+          window.location.href = "/index.html";
         }
       } catch (error) {
         console.error("認証チェックエラー:", error);
         alert("認証チェック中に問題が発生しました。再度ログインしてください。");
-        window.location.href = "/entry.html";
+        window.location.href = "/index.html";
       }
     };
 
@@ -699,10 +699,17 @@
       // ルームボタンのアクティブ状態を更新
       document.querySelectorAll('.room-button, .user-button').forEach(btn => btn.classList.remove('active'));
       if (type === 'public') {
-          document.querySelector(`.room-button[data-room="${target}"]`).classList.add('active');
+          const publicRoomButton = document.querySelector(`.room-button[data-room="${target}"]`);
+          if (publicRoomButton) {
+              publicRoomButton.classList.add('active');
+          }
       } else if (type === 'dm') {
           // DMボタンは動的に生成されるため、特定のボタンにactiveクラスを付けるロジックは別途必要
           // または、選択されたユーザーボタンにactiveクラスを付ける
+          const dmUserButton = document.querySelector(`.user-button[data-user-id="${dmTargetUserId}"]`);
+          if (dmUserButton) {
+              dmUserButton.classList.add('active');
+          }
       }
       document.getElementById("chat-box").innerHTML = ""; // メッセージクリア
     }
@@ -742,29 +749,30 @@
         const userListDiv = document.getElementById("user-list");
         userListDiv.innerHTML = ""; // 既存のリストをクリア
 
-        if (users.length === 0) {
+        // 自分自身はDMリストに表示しない
+        const filteredUsers = users.filter(user => user.userId !== myUserId);
+
+        if (filteredUsers.length === 0) {
             document.getElementById("no-users-message").style.display = 'block';
             return;
         } else {
             document.getElementById("no-users-message").style.display = 'none';
         }
 
-        // 自分自身はDMリストに表示しない
-        const filteredUsers = users.filter(user => user.userId !== myUserId);
-
         filteredUsers.forEach(user => {
             const userButton = document.createElement("button");
             userButton.classList.add("user-button");
+            userButton.dataset.userId = user.id; // data属性にuserIdを追加
             if (user.online) {
                 userButton.classList.add("online");
             }
             userButton.innerHTML = `${user.username} <span class="online-indicator"></span>`;
             userButton.addEventListener("click", () => {
-                if (user.userId === myUserId) {
+                if (user.id === myUserId) { // user.id を使用
                     alert("自分自身にはDMできません。");
                     return;
                 }
-                joinRoom('dm', null, user.userId, user.username);
+                joinRoom('dm', null, user.id, user.username); // user.id を渡す
             });
             userListDiv.appendChild(userButton);
         });
@@ -987,7 +995,7 @@
             const result = await response.json();
             if (result.success) {
                 localStorage.clear(); // ローカルストレージの認証情報をクリア
-                window.location.href = "/entry.html"; // サイトパスワード入力画面へリダイレクト
+                window.location.href = "/index.html"; // ログイン画面へリダイレクト
             } else {
                 alert("ログアウトに失敗しました。");
             }
