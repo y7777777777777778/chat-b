@@ -3,76 +3,23 @@
 <head>
     <meta charset="UTF-8">
     <title>新規登録</title>
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <link href="https://fonts.googleapis.com/css2?family=Poppins&display=swap" rel="stylesheet">
     <style>
-        body {
-            font-family: 'Poppins', sans-serif;
-            margin: 0;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            min-height: 100vh;
-            background-color: #f0f2f5;
-            color: #333;
-        }
-        .container {
-            background-color: #fff;
-            padding: 30px;
-            border-radius: 8px;
-            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
-            width: 100%;
-            max-width: 400px;
-            text-align: center;
-        }
-        h1 {
-            color: #262626;
-            margin-bottom: 25px;
-            font-size: 2em;
-        }
-        input {
-            width: calc(100% - 20px);
-            padding: 12px;
-            margin-bottom: 15px;
-            border: 1px solid #ddd;
-            border-radius: 5px;
-            font-size: 1em;
-        }
-        button {
-            width: calc(100% - 20px);
-            padding: 12px;
-            border: none;
-            border-radius: 5px;
-            background-color: #3897f0;
-            color: white;
-            font-size: 1.1em;
-            cursor: pointer;
-            transition: background-color 0.2s ease;
-            margin-bottom: 10px;
-        }
-        button:hover {
-            background-color: #0056b3;
-        }
-        p {
-            margin-top: 20px;
-            font-size: 0.9em;
-        }
-        a {
-            color: #3897f0;
-            text-decoration: none;
-        }
-        a:hover {
-            text-decoration: underline;
-        }
+        body { font-family: sans-serif; display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 100vh; background-color: #f0f2f5; margin: 0; }
+        div { background-color: white; padding: 30px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); text-align: center; }
+        input { width: 100%; padding: 10px; margin-bottom: 15px; border: 1px solid #ddd; border-radius: 4px; box-sizing: border-box; }
+        button { width: 100%; padding: 10px; background-color: #3897f0; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 16px; margin-top: 10px; }
+        button:hover { background-color: #357ae8; }
+        a { color: #3897f0; text-decoration: none; }
+        a:hover { text-decoration: underline; }
     </style>
 </head>
 <body>
-    <div class="container">
+    <div>
         <h1>新規登録</h1>
-        <input type="text" id="username" placeholder="ユーザー名を入力" required />
-        <input type="password" id="password" placeholder="パスワードを入力" required />
+        <input type="text" id="username" placeholder="ユーザー名" required />
+        <input type="password" id="password" placeholder="パスワード" required />
         <button onclick="register()">登録</button>
-        <p>アカウントをお持ちですか？ <a href="index.html">ログイン</a></p>
+        <p><a href="index.html">ログイン画面に戻る</a></p>
     </div>
 
     <script>
@@ -94,14 +41,14 @@
                 const result = await response.json();
 
                 if (result.success) {
-                    alert(result.message);
-                    window.location.href = "index.html"; // 登録成功後、ログインページへリダイレクト
+                    alert("登録が完了しました！ログインしてください。");
+                    window.location.href = "index.html";
                 } else {
-                    alert("登録失敗: " + result.message);
+                    alert(`登録に失敗しました: ${result.message}`);
                 }
             } catch (error) {
                 console.error("登録エラー:", error);
-                alert("登録中にエラーが発生しました。");
+                alert("登録中に問題が発生しました！💥");
             }
         }
     </script>
