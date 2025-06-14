@@ -7,7 +7,6 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <link href="https://fonts.googleapis.com/css2?family=Poppins&display=swap" rel="stylesheet" />
   <style>
-    /* 既存のCSSは省略 */
     * { box-sizing: border-box; }
     body { font-family: "Poppins", sans-serif; margin: 0; background-color: #fafafa; color: #262626; }
     h1, h2 { text-align: center; color: #262626; }
@@ -32,8 +31,8 @@
     .pinned-message { background-color: #fffacd; padding: 8px; border-left: 5px solid #ffcc00; margin-bottom: 10px; border-radius: 4px; font-size: 0.9em; position: relative; }
     .pinned-message button { position: absolute; top: 5px; right: 5px; padding: 3px 8px; background-color: #f0ad4e; font-size: 0.7em; }
     #logout-button {
-      background-color: #dc3545; /* Bootstrap danger color */
-      margin-left: auto; /* 右端に配置 */
+      background-color: #dc3545;
+      margin-left: auto;
     }
     #logout-button:hover {
       background-color: #c82333;
@@ -63,7 +62,8 @@
 
   <script>
     const socket = io();
-    let username = ""; // ユーザー名はサーバーから取得
+    let username = "";
+    let currentRoom = "雑談部屋"; // 初期ルーム
 
     // ページロード時に認証状態をチェックし、ユーザー名を取得
     window.onload = async () => {
@@ -73,40 +73,39 @@
         if (result.authenticated) {
           username = result.username;
           document.getElementById("usernameDisplay").textContent = `ようこそ、${username}さん！`;
+          
+          // 認証が確認できた後でSocket.IOのルーム参加を行う
+          document.getElementById("roomTitle").textContent = currentRoom;
+          socket.emit("joinRoom", { room: currentRoom }); // usernameはサーバーセッションから取得
+          fetchMessages(currentRoom);
+
+          // ルーム切り替えボタンのイベントリスナー
+          document.querySelectorAll(".room-button").forEach(button => {
+            button.addEventListener("click", () => {
+              const newRoom = button.dataset.room;
+              // 現在の部屋から離脱 (サーバーに通知)
+              socket.emit("leaveRoom", currentRoom);
+              currentRoom = newRoom;
+              document.getElementById("roomTitle").textContent = newRoom;
+              socket.emit("joinRoom", { room: currentRoom }); // 新しい部屋に参加
+              document.getElementById("chat-box").innerHTML = ""; // チャットボックスをクリア
+              fetchMessages(currentRoom); // 新しい部屋のメッセージをロード
+            });
+          });
+
         } else {
           // 未認証の場合、ログインページへリダイレクト
-          window.location.href = "index.html";
-          return; // リダイレクト後、これ以降の処理は行わない
+          alert("認証が必要です。ログインページにリダイレクトします。"); // 明示的なアラート
+          window.location.href = "index.html?redirected=true"; // リダイレクトフラグを追加
+          return;
         }
       } catch (error) {
         console.error("認証チェックエラー:", error);
         alert("認証エラーが発生しました。ログインページに戻ります。");
-        window.location.href = "index.html";
+        window.location.href = "index.html?redirected=true"; // リダイレクトフラグを追加
         return;
       }
-
-      // 最初のルームを設定して参加
-      const initialRoom = "雑談部屋"; // デフォルトの部屋
-      document.getElementById("roomTitle").textContent = initialRoom;
-      socket.emit("joinRoom", { room: initialRoom, username: username }); // ユーザー名を渡す
-      fetchMessages(initialRoom);
-
-      // ルーム切り替えボタンのイベントリスナー
-      document.querySelectorAll(".room-button").forEach(button => {
-        button.addEventListener("click", () => {
-          const newRoom = button.dataset.room;
-          // 現在の部屋から離脱 (サーバーに通知)
-          socket.emit("leaveRoom", currentRoom);
-          currentRoom = newRoom;
-          document.getElementById("roomTitle").textContent = newRoom;
-          socket.emit("joinRoom", { room: currentRoom, username: username }); // 新しい部屋に参加 (ユーザー名を渡す)
-          document.getElementById("chat-box").innerHTML = ""; // チャットボックスをクリア
-          fetchMessages(currentRoom); // 新しい部屋のメッセージをロード
-        });
-      });
     };
-
-    let currentRoom = "雑談部屋"; // 初期ルーム
 
     // メッセージをチャットボックスに追加する関数
     function addMessageToChatBox(message) {
@@ -114,7 +113,7 @@
       const messageContainer = document.createElement("div");
       messageContainer.className = "message-container";
 
-      const isSent = message.user === username; // ログインユーザーが送信したメッセージか
+      const isSent = message.user === username;
       const messageClass = isSent ? "sent" : "received";
 
       const messageElement = document.createElement("div");
@@ -122,7 +121,6 @@
 
       let contentHtml = "";
       if (message.file) {
-        // ファイルメッセージ
         const fileExtension = message.file.split(".").pop().toLowerCase();
         if (["jpg", "jpeg", "png", "gif"].includes(fileExtension)) {
           contentHtml = `<img src="${message.file}" alt="Uploaded Image">`;
@@ -132,7 +130,6 @@
           contentHtml = `<a href="${message.file}" target="_blank">📄 ${message.file.split("/").pop()}</a>`;
         }
       } else {
-        // テキストメッセージ
         contentHtml = escapeHtml(message.text);
       }
 
@@ -166,7 +163,7 @@
         const response = await fetch(`/messages?room=${room}`);
         const messages = await response.json();
         const chatBox = document.getElementById("chat-box");
-        chatBox.innerHTML = ""; // 既存メッセージをクリア
+        chatBox.innerHTML = "";
         messages.forEach(addMessageToChatBox);
       } catch (error) {
         console.error("メッセージ履歴の取得エラー:", error);
@@ -183,19 +180,19 @@
 
     socket.on("messageHistory", (messages) => {
         const chatBox = document.getElementById("chat-box");
-        chatBox.innerHTML = ""; // 既存メッセージをクリア
+        chatBox.innerHTML = "";
         messages.forEach(addMessageToChatBox);
     });
 
     // 認証されていない場合にリダイレクトするイベント
     socket.on("redirect", (url) => {
         alert("認証が必要です。ログインページにリダイレクトします。");
-        window.location.href = url;
+        window.location.href = url + "?redirected=true"; // リダイレクトフラグを追加
     });
 
     socket.on("updatePinnedMessage", (data) => {
         const pinnedMessageArea = document.getElementById("pinned-message-area");
-        pinnedMessageArea.innerHTML = ""; // クリア
+        pinnedMessageArea.innerHTML = "";
 
         if (data.message) {
             const pinnedDiv = document.createElement("div");
@@ -271,7 +268,6 @@
         if (!result.success) {
           alert("ファイル送信に失敗しました！💥 " + result.error);
         } else {
-            // ファイル選択をリセット
             document.getElementById("fileInput").value = "";
         }
       } catch (error) {
