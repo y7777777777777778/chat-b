@@ -2,115 +2,20 @@
 <html lang="ja">
 <head>
     <meta charset="UTF-8">
-    <title>ログイン</title>
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <link href="https://fonts.googleapis.com/css2?family=Poppins&display=swap" rel="stylesheet">
-    <style>
-        body {
-            font-family: 'Poppins', sans-serif;
-            margin: 0;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            min-height: 100vh;
-            background-color: #f0f2f5;
-            color: #333;
-        }
-        .container {
-            background-color: #fff;
-            padding: 30px;
-            border-radius: 8px;
-            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
-            width: 100%;
-            max-width: 400px;
-            text-align: center;
-        }
-        h1 {
-            color: #262626;
-            margin-bottom: 25px;
-            font-size: 2em;
-        }
-        input {
-            width: calc(100% - 20px);
-            padding: 12px;
-            margin-bottom: 15px;
-            border: 1px solid #ddd;
-            border-radius: 5px;
-            font-size: 1em;
-        }
-        button {
-            width: calc(100% - 20px);
-            padding: 12px;
-            border: none;
-            border-radius: 5px;
-            background-color: #3897f0;
-            color: white;
-            font-size: 1.1em;
-            cursor: pointer;
-            transition: background-color 0.2s ease;
-            margin-bottom: 10px;
-        }
-        button:hover {
-            background-color: #0056b3;
-        }
-        p {
-            margin-top: 20px;
-            font-size: 0.9em;
-        }
-        a {
-            color: #3897f0;
-            text-decoration: none;
-        }
-        a:hover {
-            text-decoration: underline;
-        }
-        #guest-button { /* ゲストログインボタンのスタイル */
-            background-color: #6c757d; /* 灰色系の色 */
-        }
-        #guest-button:hover {
-            background-color: #5a6268;
-        }
-    </style>
+    <title>個別ログイン</title>
 </head>
 <body>
-    <div class="container">
-        <h1>ログイン</h1>
-        <input type="text" id="username" placeholder="ユーザー名を入力" required />
-        <input type="password" id="password" placeholder="パスワードを入力" required />
-        <button onclick="login()">ログイン</button>
-        <p>アカウントがない方は <a href="register.html">新規登録</a> してください。</p>
-        <hr style="margin: 20px 0; border: none; border-top: 1px solid #eee;"> <button id="guest-button" onclick="guestLogin()">ログインせずに参加 (ゲスト)</button>
-    </div>
+    <h1>個別ログイン</h1>
+    <input type="text" id="username" placeholder="ユーザー名を入力" />
+    <input type="password" id="password" placeholder="パスワードを入力" />
+    <button onclick="login()">ログイン</button>
+    <p>アカウントがない方は <a href="register.html">新規登録</a> してください。</p>
+    <button onclick="guestLogin()">ゲストとして参加</button>
 
     <script>
-        // ページロード時に認証状態をチェック
-        window.onload = async () => {
-            try {
-                // キャッシュを無効化するクエリパラメータを追加
-                const response = await fetch(`/check-auth?t=${new Date().getTime()}`);
-                const result = await response.json();
-                if (result.authenticated) {
-                    // 既に認証済みならチャットページへリダイレクト
-                    window.location.href = "chat.html";
-                } else {
-                    const urlParams = new URLSearchParams(window.location.search);
-                    if (urlParams.get('redirected') === 'true') {
-                        // alert("認証が必要です。ログインページにリダイレクトされました。"); // 不要な場合はコメントアウト
-                    }
-                }
-            } catch (error) {
-                console.error("認証チェックエラー:", error);
-            }
-        };
-
         async function login() {
             const username = document.getElementById("username").value;
             const password = document.getElementById("password").value;
-
-            if (username.trim() === "" || password.trim() === "") {
-                alert("ユーザー名とパスワードを入力してください！");
-                return;
-            }
 
             try {
                 const response = await fetch("/login", {
@@ -121,36 +26,23 @@
                 const result = await response.json();
 
                 if (result.success) {
-                    alert(result.message);
+                    localStorage.setItem("authenticated", "true");
+                    localStorage.setItem("username", result.username); // サーバーから返されたユーザー名
+                    localStorage.setItem("userId", result.userId);     // サーバーから返されたユーザーID
                     window.location.href = "chat.html";
                 } else {
-                    alert("ログイン失敗: " + result.message);
+                    alert(`ログインに失敗しました: ${result.message}`);
                 }
             } catch (error) {
                 console.error("ログインエラー:", error);
-                alert("ログイン中にエラーが発生しました。");
+                alert("ログイン中に問題が発生しました！💥");
             }
         }
 
-        async function guestLogin() {
-            try {
-                const response = await fetch("/guest-login", {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({}), // ゲストログインはbodyは不要だが、空のオブジェクトを送信
-                });
-                const result = await response.json();
-
-                if (result.success) {
-                    alert(result.message);
-                    window.location.href = "chat.html";
-                } else {
-                    alert("ゲストログイン失敗: " + result.message);
-                }
-            } catch (error) {
-                console.error("ゲストログインエラー:", error);
-                alert("ゲストログイン中にエラーが発生しました。");
-            }
+        function guestLogin() {
+            // ゲストログインはサーバーへの認証リクエストは不要
+            // chat.htmlに?guest=trueをつけてアクセスし、chat.html側でセッションとユーザーIDを管理
+            window.location.href = "chat.html?guest=true";
         }
     </script>
 </body>
