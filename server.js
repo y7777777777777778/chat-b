@@ -1,4 +1,3 @@
-
 const fs = require("fs");
 const path = require("path");
 const express = require("express");
@@ -31,11 +30,9 @@ const dbPath = "./chat.db";
 const db = new sqlite3.Database(dbPath, sqlite3.OPEN_READWRITE | sqlite3.OPEN_CREATE, (err) => {
     if (err) {
         console.error("Database connection error:", err.message);
-        // データベース接続失敗は致命的エラーとしてアプリケーションを終了
         process.exit(1);
     } else {
         console.log("Connected to the SQLite database.");
-        // usersテーブルの作成（存在しない場合のみ）
         db.run(`CREATE TABLE IF NOT EXISTS users (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             username TEXT UNIQUE NOT NULL,
@@ -43,7 +40,6 @@ const db = new sqlite3.Database(dbPath, sqlite3.OPEN_READWRITE | sqlite3.OPEN_CR
         )`, (err) => {
             if (err) {
                 console.error("Error creating users table:", err.message);
-                // テーブル作成失敗も致命的エラーとしてアプリケーションを終了
                 process.exit(1);
             } else {
                 console.log("Users table ensured.");
@@ -66,8 +62,8 @@ const sessionStore = new KnexSessionStore({
     tablename: "sessions",
     sidfieldname: "sid",
     knex: knex,
-    createtable: true, // セッションテーブルが存在しない場合は自動作成
-    clearInterval: 1000 * 60 * 60 // 1時間ごとに期限切れセッションをクリーンアップ
+    createtable: true,
+    clearInterval: 1000 * 60 * 60
 });
 
 // **セッションミドルウェアの設定**
@@ -77,61 +73,53 @@ const sessionMiddleware = session({
     saveUninitialized: false,
     store: sessionStore,
     cookie: {
-        maxAge: 1000 * 60 * 60 * 24, // 1日セッションを保持
-        httpOnly: true, // クライアント側のJavaScriptからCookieにアクセスできないようにする
-        secure: process.env.NODE_ENV === 'production', // 本番環境（Render）ではHTTPSなのでtrue
-        sameSite: 'Lax' // CSRF対策
+        maxAge: 1000 * 60 * 60 * 24,
+        httpOnly: true,
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: 'Lax'
     }
 });
-app.use(sessionMiddleware); // Expressアプリケーションにセッションミドルウェアを適用
+app.use(sessionMiddleware);
 
 // **認証チェックミドルウェア**
 function isAuthenticated(req, res, next) {
-    // 常に認証なしでアクセスを許可するパス（ログイン/登録のPOSTリクエストを含む）
     const alwaysPublicPaths = [
         '/login',
         '/register'
     ];
 
-    // GETリクエストでのみ認証なしでアクセスを許可するパス（HTMLファイル、認証状態チェック）
     const publicGetPaths = [
-        '/', // ルートパス (index.htmlへ)
+        '/',
         '/index.html',
         '/register.html',
-        '/chat.html', // chat.html自体へのアクセスは許可
-        '/check-auth' // 認証状態チェックAPI
+        '/chat.html',
+        '/check-auth'
     ];
 
-    // ログインと登録のPOSTリクエストは認証不要
     if (alwaysPublicPaths.includes(req.path) && req.method === 'POST') {
         return next();
     }
 
-    // 公開されているHTMLファイルや認証チェックのGETリクエストは認証不要
     if (publicGetPaths.includes(req.path) && req.method === 'GET') {
         return next();
     }
 
-    // アップロードされた静的ファイルも認証不要
     if (req.path.startsWith('/uploads/')) {
         return next();
     }
 
-    // 上記以外の全てのリクエストは認証が必要
     if (req.session.isAuthenticated && req.session.userId) {
         next();
     } else {
         console.log(`Access denied for ${req.method} ${req.path}. Redirecting to /index.html`);
-        // AJAXリクエストかどうかに応じてレスポンスを分岐
         if (req.xhr || (req.headers.accept && req.headers.accept.includes('application/json'))) {
             res.status(401).json({ success: false, message: "認証が必要です。" });
         } else {
-            // 通常のブラウザリクエストの場合はリダイレクト (リダイレクトフラグ付き)
             res.redirect('/index.html?redirected=true');
         }
     }
 }
-app.use(isAuthenticated); // 全てのリクエストに認証チェックを適用
+app.use(isAuthenticated);
 
 // メッセージを保存
 function saveMessage(data) {
@@ -202,7 +190,6 @@ app.post("/login", (req, res) => {
             req.session.username = user.username;
             req.session.isAuthenticated = true;
 
-            // セッションを明示的に保存し、保存完了後にレスポンスを返す
             req.session.save((err) => {
                 if (err) {
                     console.error("Session save error after login:", err);
@@ -260,7 +247,6 @@ app.get("/messages", (req, res) => {
     if (!room) {
         return res.status(400).json({ error: "roomパラメータが必要です。" });
     }
-    // このエンドポイントは認証ミドルウェアで保護されているため、req.session.usernameは利用可能
     if (!req.session.username) {
         return res.status(401).json({ error: "認証されていません。" });
     }
