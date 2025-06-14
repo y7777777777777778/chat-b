@@ -95,14 +95,14 @@ function isAuthenticated(req, res, next) {
     }
     next();
   } else {
-    console.log("Not authenticated, redirecting to entry.html");
-    res.redirect("/entry.html");
+    console.log("Not authenticated, redirecting to index.html");
+    res.redirect("/index.html");
   }
 }
 
-// ルートアクセス時に `entry.html` を提供
+// ルートアクセス時に `index.html` を提供
 app.get("/", (req, res) => {
-  res.sendFile(path.join(__dirname, "public", "entry.html"));
+  res.sendFile(path.join(__dirname, "public", "index.html"));
 });
 
 // 各HTMLファイルのルーティング
