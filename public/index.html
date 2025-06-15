@@ -2,61 +2,268 @@
 <html lang="ja">
 <head>
     <meta charset="UTF-8">
-    <title>ログイン</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ログイン・登録</title>
     <style>
-        body { font-family: sans-serif; display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 100vh; background-color: #f0f2f5; margin: 0; }
-        div { background-color: white; padding: 30px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); text-align: center; }
-        input { width: 100%; padding: 10px; margin-bottom: 15px; border: 1px solid #ddd; border-radius: 4px; box-sizing: border-box; }
-        button { width: 100%; padding: 10px; background-color: #3897f0; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 16px; margin-top: 10px; }
-        button:hover { background-color: #357ae8; }
-        a { color: #3897f0; text-decoration: none; }
-        a:hover { text-decoration: underline; }
-        p { margin-top: 20px; }
+        body {
+            font-family: Arial, sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            background-color: #f0f2f5;
+            margin: 0;
+            flex-direction: column;
+        }
+        .container {
+            background-color: #ffffff;
+            padding: 30px;
+            border-radius: 8px;
+            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
+            width: 100%;
+            max-width: 400px;
+            box-sizing: border-box;
+            text-align: center;
+        }
+        h2 {
+            color: #333;
+            margin-bottom: 25px;
+        }
+        .input-group {
+            margin-bottom: 15px;
+            text-align: left;
+        }
+        .input-group label {
+            display: block;
+            margin-bottom: 5px;
+            color: #555;
+            font-weight: bold;
+        }
+        .input-group input {
+            width: calc(100% - 20px);
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 1em;
+            box-sizing: border-box;
+        }
+        button {
+            width: 100%;
+            padding: 12px;
+            background-color: #007bff;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            font-size: 1.1em;
+            cursor: pointer;
+            transition: background-color 0.3s ease;
+            margin-top: 10px;
+        }
+        button:hover {
+            background-color: #0056b3;
+        }
+        .message {
+            margin-top: 20px;
+            padding: 10px;
+            border-radius: 4px;
+            font-size: 0.9em;
+        }
+        .message.success {
+            background-color: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        .message.error {
+            background-color: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+        .guest-login-area {
+            margin-top: 30px;
+            padding-top: 20px;
+            border-top: 1px solid #eee;
+        }
+        .guest-login-area button {
+            background-color: #6c757d;
+        }
+        .guest-login-area button:hover {
+            background-color: #5a6268;
+        }
     </style>
 </head>
 <body>
-    <div>
-        <h1>ログイン</h1>
-        <input type="text" id="username" placeholder="ユーザー名" required />
-        <input type="password" id="password" placeholder="パスワード" required />
-        <button onclick="login()">ログイン</button>
-        <p>アカウントをお持ちでない方は <a href="register.html">新規登録</a> してください。</p>
-        <button onclick="guestLogin()">ゲストとして参加</button>
+    <div class="container">
+        <h2>ログイン</h2>
+        <div class="input-group">
+            <label for="loginUsername">ユーザー名:</label>
+            <input type="text" id="loginUsername" placeholder="ユーザー名" required>
+        </div>
+        <div class="input-group">
+            <label for="loginPassword">パスワード:</label>
+            <input type="password" id="loginPassword" placeholder="パスワード" required>
+        </div>
+        <button id="loginButton">ログイン</button>
+        <p style="margin-top: 20px; color: #555;">アカウントをお持ちでないですか？</p>
+        <button id="showRegisterButton">新規登録</button>
+        <div id="loginMessage" class="message" style="display: none;"></div>
+
+        <div class="guest-login-area">
+            <h3>ゲストログイン</h3>
+            <p>アカウントなしで一時的にチャットに参加します。</p>
+            <button id="guestLoginButton">ゲストとして参加</button>
+        </div>
+    </div>
+
+    <div id="registerContainer" class="container" style="display: none; margin-top: 20px;">
+        <h2>新規登録</h2>
+        <div class="input-group">
+            <label for="registerUsername">ユーザー名:</label>
+            <input type="text" id="registerUsername" placeholder="ユーザー名" required>
+        </div>
+        <div class="input-group">
+            <label for="registerPassword">パスワード:</label>
+            <input type="password" id="registerPassword" placeholder="パスワード" required>
+        </div>
+        <div class="input-group">
+            <label for="confirmPassword">パスワード確認:</label>
+            <input type="password" id="confirmPassword" placeholder="パスワード確認" required>
+        </div>
+        <button id="registerButton">登録</button>
+        <p style="margin-top: 20px; color: #555;">既にアカウントをお持ちですか？</p>
+        <button id="showLoginButton">ログインページへ</button>
+        <div id="registerMessage" class="message" style="display: none;"></div>
     </div>
 
     <script>
-        async function login() {
-            const username = document.getElementById("username").value;
-            const password = document.getElementById("password").value;
+        const loginContainer = document.querySelector('.container');
+        const registerContainer = document.getElementById('registerContainer');
+        const loginButton = document.getElementById('loginButton');
+        const registerButton = document.getElementById('registerButton');
+        const showRegisterButton = document.getElementById('showRegisterButton');
+        const showLoginButton = document.getElementById('showLoginButton');
+        const guestLoginButton = document.getElementById('guestLoginButton');
+
+        const loginUsernameInput = document.getElementById('loginUsername');
+        const loginPasswordInput = document.getElementById('loginPassword');
+        const registerUsernameInput = document.getElementById('registerUsername');
+        const registerPasswordInput = document.getElementById('registerPassword');
+        const confirmPasswordInput = document.getElementById('confirmPassword');
+
+        const loginMessageDiv = document.getElementById('loginMessage');
+        const registerMessageDiv = document.getElementById('registerMessage');
+
+        function showMessage(element, type, msg) {
+            element.textContent = msg;
+            element.className = `message ${type}`;
+            element.style.display = 'block';
+        }
+
+        function hideMessage(element) {
+            element.style.display = 'none';
+        }
+
+        showRegisterButton.addEventListener('click', () => {
+            loginContainer.style.display = 'none';
+            registerContainer.style.display = 'block';
+            hideMessage(loginMessageDiv);
+            hideMessage(registerMessageDiv);
+        });
+
+        showLoginButton.addEventListener('click', () => {
+            loginContainer.style.display = 'block';
+            registerContainer.style.display = 'none';
+            hideMessage(loginMessageDiv);
+            hideMessage(registerMessageDiv);
+        });
+
+        loginButton.addEventListener('click', async () => {
+            const username = loginUsernameInput.value;
+            const password = loginPasswordInput.value;
+
+            if (!username || !password) {
+                showMessage(loginMessageDiv, 'error', 'ユーザー名とパスワードを入力してください。');
+                return;
+            }
 
             try {
-                const response = await fetch("/login", {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({ username, password }),
+                const response = await fetch('/login', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ username, password })
                 });
-                const result = await response.json();
+                const data = await response.json();
 
-                if (result.success) {
-                    localStorage.setItem("authenticated", "true"); 
-                    localStorage.setItem("username", result.username);
-                    localStorage.setItem("userId", result.userId);
-                    window.location.href = "chat.html";
+                if (data.success) {
+                    showMessage(loginMessageDiv, 'success', data.message);
+                    // ログイン成功したらチャットページへリダイレクト
+                    window.location.href = '/chat.html';
                 } else {
-                    alert(`ログインに失敗しました: ${result.message}`);
+                    showMessage(loginMessageDiv, 'error', data.message);
                 }
             } catch (error) {
-                console.error("ログインエラー:", error);
-                alert("ログイン中に問題が発生しました！💥");
+                console.error('ログインエラー:', error);
+                showMessage(loginMessageDiv, 'error', 'サーバーとの通信に失敗しました。');
             }
-        }
+        });
 
-        function guestLogin() {
-            localStorage.setItem("authenticated", "false");
-            localStorage.removeItem("username");
-            localStorage.removeItem("userId");
-            window.location.href = "chat.html?guest=true";
-        }
+        registerButton.addEventListener('click', async () => {
+            const username = registerUsernameInput.value;
+            const password = registerPasswordInput.value;
+            const confirmPassword = confirmPasswordInput.value;
+
+            if (!username || !password || !confirmPassword) {
+                showMessage(registerMessageDiv, 'error', 'すべての項目を入力してください。');
+                return;
+            }
+            if (password !== confirmPassword) {
+                showMessage(registerMessageDiv, 'error', 'パスワードが一致しません。');
+                return;
+            }
+
+            try {
+                const response = await fetch('/register', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ username, password })
+                });
+                const data = await response.json();
+
+                if (data.success) {
+                    showMessage(registerMessageDiv, 'success', data.message + ' ログインしてください。');
+                    // 登録成功後、ログインフォームへ戻す
+                    setTimeout(() => {
+                        showLoginButton.click();
+                        loginUsernameInput.value = username;
+                        loginPasswordInput.value = '';
+                        hideMessage(registerMessageDiv);
+                    }, 2000);
+                } else {
+                    showMessage(registerMessageDiv, 'error', data.message);
+                }
+            } catch (error) {
+                console.error('登録エラー:', error);
+                showMessage(registerMessageDiv, 'error', 'サーバーとの通信に失敗しました。');
+            }
+        });
+
+        guestLoginButton.addEventListener('click', async () => {
+            // ゲストログインとして /check-auth にリクエストを送る
+            try {
+                const response = await fetch('/check-auth?guest=true', { method: 'GET' });
+                const data = await response.json();
+
+                if (data.isGuest) {
+                    showMessage(loginMessageDiv, 'success', 'ゲストとしてチャットに参加します...');
+                    window.location.href = '/chat.html';
+                } else {
+                    showMessage(loginMessageDiv, 'error', 'ゲストログインに失敗しました。');
+                }
+            } catch (error) {
+                console.error('ゲストログインエラー:', error);
+                showMessage(loginMessageDiv, 'error', 'ゲストログインに失敗しました。');
+            }
+        });
+
     </script>
 </body>
 </html>
