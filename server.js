@@ -1,4 +1,4 @@
-// server.js の完全なコード例
+// server.js の完全なコード
 
 // 必要なモジュールのインポート
 const express = require("express");
@@ -8,6 +8,7 @@ const mongoose = require("mongoose");
 const path = require("path");
 const session = require("express-session");
 const MongoStore = require("connect-mongo"); // 追加: MongoDBをセッションストアとして使用するため
+const { v4: uuidv4 } = require('uuid'); // uuidライブラリをインポート
 
 // 環境変数の設定 (Renderで設定したものを使用)
 const PORT = process.env.PORT || 3000; // RenderはPORT環境変数でポートを指定
@@ -41,7 +42,7 @@ const io = socketIo(server, {
 
 // MongoDBへの接続
 mongoose.connect(MONGODB_URI)
-    .then(() => console.log("MongoDBに接続しました！"))
+    .then(() => console.log("MongoDBに接続しました！")) //
     .catch((err) => console.error("MongoDB接続エラー:", err));
 
 // Mongooseスキーマとモデルの定義
@@ -49,7 +50,7 @@ mongoose.connect(MONGODB_URI)
 // 例:
 const userSchema = new mongoose.Schema({
     username: { type: String, required: true, unique: true },
-    password: { type: String, required: true },
+    password: { type: String, required: true }, // 本番環境ではパスワードのハッシュ化が必須
     isOnline: { type: Boolean, default: false },
     lastSeen: { type: Date, default: Date.now },
     isGuest: { type: Boolean, default: false }
@@ -87,12 +88,20 @@ app.use(express.json()); // JSON形式のリクエストボディを解析
 app.use(express.urlencoded({ extended: true })); // URLエンコードされたリクエストボディを解析
 app.use(sessionMiddleware); // セッションミドルウェアを使用
 
-// 静的ファイルの提供 (Reactアプリのビルドされたファイルなど)
-// 本番環境では、クライアント側のビルドディレクトリを指定します。
-// 例: app.use(express.static(path.join(__dirname, 'client', 'build')));
-// GitHubリポジトリの構造が分からないため、ここではコメントアウトしています。
-// 必要に応じてパスを修正してください。
-// app.use(express.static(path.join(__dirname, 'public'))); // もしpublicフォルダがある場合
+// =========================================================
+// 静的ファイルの提供とSPAのためのフォールバックルート (ここが重要！)
+// あなたのスクリーンショット によると、
+// フロントエンドのファイルは 'public' フォルダにあると想定されます。
+app.use(express.static(path.join(__dirname, 'public'))); // 'public' フォルダから静的ファイルを提供
+
+// SPA (Single Page Application) のためのフォールバックルート
+// 上記の静的ファイルやAPIルート以外のすべてのGETリクエストを、
+// 'public' フォルダ内の 'index.html' にルーティングします。
+// これにより、React Routerなどがクライアント側でルーティングを処理できます。
+app.get('*', (req, res) => {
+    res.sendFile(path.join(__dirname, 'public', 'index.html')); // 'public/index.html' を返す
+});
+// =========================================================
 
 // ルート定義
 // 認証チェックルート
@@ -102,7 +111,7 @@ app.get("/check-auth", async (req, res) => {
     // ゲストセッションが存在しないか、既存のユーザーセッションがない場合
     if (!req.session.userId && !req.session.guestId) {
         // 新しいゲストセッションを生成
-        const guestId = `guest-${require('uuid').v4()}`; // uuidライブラリが必要
+        const guestId = `guest-${uuidv4()}`; // uuidライブラリのv4関数を使用
         const guestUsername = `ゲスト-${Math.floor(Math.random() * 9000) + 1000}`;
         
         try {
@@ -115,7 +124,7 @@ app.get("/check-auth", async (req, res) => {
             await guestUser.save();
             req.session.guestId = guestUser._id; // _id をセッションに保存
             req.session.username = guestUsername; // ユーザー名をセッションに保存
-            console.log(`新規ゲストセッションを生成します。ユーザー名: ${guestUsername} (ID: ${guestUser._id})`);
+            console.log(`新規ゲストセッションを生成します。ユーザー名: ${guestUsername} (ID: ${guestUser._id})`); //
             return res.status(200).json({
                 isAuthenticated: true,
                 isGuest: true,
@@ -154,7 +163,7 @@ app.get("/check-auth", async (req, res) => {
             if (guestUser && guestUser.isGuest) {
                 guestUser.isOnline = true; // ログイン時にtrueにする
                 await guestUser.save();
-                console.log(`認証チェック: ゲストユーザー ${guestUser.username} (ID: ${guestUser._id}) です。`);
+                console.log(`認証チェック: ゲストユーザー ${guestUser.username} (ID: ${guestUser._id}) です。`); //
                 return res.status(200).json({ isAuthenticated: true, isGuest: true, username: guestUser.username, userId: guestUser._id });
             } else {
                  req.session.destroy(() => {
@@ -168,7 +177,7 @@ app.get("/check-auth", async (req, res) => {
         }
     } else {
         // ゲスト要求なしで認証されていない場合
-        console.log("認証チェック: ユーザーは認証されていません (ゲスト要求なし)。");
+        console.log("認証チェック: ユーザーは認証されていません (ゲスト要求なし)。"); //
         res.status(401).json({ isAuthenticated: false, message: "認証されていません。ログインしてください。" });
     }
 });
@@ -187,7 +196,7 @@ app.post("/login", async (req, res) => {
         await user.save();
         res.status(200).json({ message: "ログイン成功！", username: user.username, userId: user._id });
     } catch (error) {
-        console.error("ログインエラー:", error);
+        console.error("ログインエラー:", error); //
         res.status(500).json({ message: "ログイン中にエラーが発生しました。" });
     }
 });
@@ -273,7 +282,7 @@ io.on("connection", async (socket) => {
             socket.disconnect(true); // エラー発生時も切断
         }
     } else {
-        console.warn("Socket.IO接続時にセッション情報が不完全です。再認証を試みます。");
+        console.warn("Socket.IO接続時にセッション情報が不完全です。再認証を試みます。"); //
         socket.emit("reauthenticate"); // クライアントに再認証を促すイベントを送信
         socket.disconnect(true); // セッションがないので切断
     }
