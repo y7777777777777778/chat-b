@@ -609,13 +609,25 @@
           }
 
         } else {
-          // 認証されていない場合はログインページへリダイレクト
-          window.location.href = "/index.html";
+          // 認証されていない場合の処理（今回はリダイレクトを削除）
+          console.warn("認証されていませんが、チャット画面を続行します。");
+          myUsername = "未認証ユーザー"; // 例: 仮のユーザー名を設定
+          myUserId = "unauthenticated"; // 例: 仮のユーザーIDを設定
+          document.getElementById("usernameDisplay").textContent = `ようこそ、${myUsername}さん！`;
+          joinRoom('public', '雑談部屋');
+          // 認証されていない状態ではメッセージ送信やDM機能はサーバー側でブロックされます。
+          // 必要に応じて、メッセージ入力欄やボタンを無効化するUI制御を追加できます。
+          // 例: document.getElementById('message-input').disabled = true;
+          //     document.getElementById('send-button').disabled = true;
         }
       } catch (error) {
         console.error("認証チェックエラー:", error); 
-        alert("認証チェック中に問題が発生しました。再度ログインしてください。");
-        window.location.href = "/index.html";
+        alert("認証チェック中に問題が発生しました。そのまま続行します。"); // アラートだけにしてリダイレクトしない
+        // エラー時もチャット画面に留まる場合、myUsernameやmyUserIdは空のままなので注意
+        myUsername = "エラーユーザー";
+        myUserId = "error-id";
+        document.getElementById("usernameDisplay").textContent = `ようこそ、${myUsername}さん！`;
+        joinRoom('public', '雑談部屋');
       }
     };
 
@@ -686,7 +698,7 @@
         document.getElementById("clearDmButton").style.display = 'none';
         socket.emit("joinRoom", currentRoom, currentRoomType);
         console.log(`公開ルーム "${currentRoom}" に参加`);
-      } else if (type === 'dm') {
+      } else if (type === 'dm' && dmTargetUserId) {
         currentDmTarget = { userId: dmTargetUserId, username: dmTargetUsername };
         document.getElementById("roomTitle").textContent = "DM";
         document.getElementById("dmTargetDisplay").textContent = `(${dmTargetUsername}とDM中)`;
@@ -729,7 +741,7 @@
 
     // ユーザーリストの取得
     async function fetchUsers() {
-        if (myUsername.startsWith("ゲスト-")) return; // ゲストはユーザーリストを取得しない
+        if (myUsername.startsWith("ゲスト-") || myUsername === "未認証ユーザー" || myUsername === "エラーユーザー") return; // ゲストや未認証ユーザーはユーザーリストを取得しない
 
         try {
             const response = await fetch("/users");
