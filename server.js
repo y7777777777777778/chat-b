@@ -60,16 +60,16 @@ const messageSchema = new mongoose.Schema({
 });
 const Message = mongoose.model("Message", messageSchema);
 
-// セッション設定 (重要: Renderでは secure: true が必須)
+// セッション設定 (重要: Renderでは secure: true と sameSite: 'None' が推奨)
 const sessionMiddleware = session({
     secret: SESSION_SECRET || "super-secret-fallback-key-for-dev", // 本番環境では環境変数必須
     resave: false,
     saveUninitialized: false,
     cookie: {
-        secure: process.env.NODE_ENV === "production", // RenderではHTTPSなので true になる
+        secure: true, // RenderはHTTPSなので必ずtrueに設定
         maxAge: 1000 * 60 * 60 * 24 * 7, // 7日間
         httpOnly: true,
-        sameSite: 'lax', // 'none' も検討 (cross-site cookies)
+        sameSite: 'None', // クロスサイトCookieを許可するために'None'に設定 (Render環境ではこれが必要になることが多い)
     },
 });
 
@@ -369,10 +369,10 @@ io.on("connection", async (socket) => {
     let currentRoom = null;
     let currentDmTargetUserId = null;
 
+    // セッション情報が存在しない、または認証済みでもゲストでもない場合は再認証を要求
     if (!session || (!session.authenticated && !session.isGuest)) {
         console.warn("Socket.IO接続時にセッション情報が不完全です。再認証を試みます。");
-        // クライアントに認証を要求し、リダイレクトさせる
-        socket.emit('reauthenticate');
+        socket.emit('reauthenticate'); // クライアントに再認証を要求
         socket.disconnect(true); // 強制切断
         return;
     }
@@ -387,7 +387,7 @@ io.on("connection", async (socket) => {
         console.log(`Socket.IO接続: ${session.username} (ID: ${session.userId}, ゲスト: ${session.isGuest})`);
 
         // データベースのオンライン状態を更新 (登録ユーザーの場合のみ)
-        if (!session.isGuest) {
+        if (!session.isGuest) { // ゲストではない場合のみDBを更新
             try {
                 await User.findByIdAndUpdate(session.userId, { online: true, lastSeen: new Date() });
             } catch (error) {
@@ -511,7 +511,7 @@ io.on("connection", async (socket) => {
             onlineUsers.delete(session.userId.toString());
             console.log(`${session.username} (ID: ${session.userId}) が切断しました。`);
 
-            if (!session.isGuest) {
+            if (!session.isGuest) { // ゲストではない場合のみDBを更新
                 try {
                     await User.findByIdAndUpdate(session.userId, { online: false, lastSeen: new Date() });
                 } catch (error) {
