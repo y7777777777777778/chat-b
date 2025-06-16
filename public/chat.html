@@ -4,764 +4,315 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>チャットアプリ</title>
-    <script src="/socket.io/socket.io.js"></script>
     <style>
-        body {
-            font-family: Arial, sans-serif;
-            display: flex;
-            height: 100vh;
-            margin: 0;
-            background-color: #f0f2f5;
-            overflow: hidden; /* スクロールバーはチャットエリアに任せる */
-        }
-        #sidebar {
-            width: 250px;
-            background-color: #343a40;
-            color: white;
-            padding: 15px;
-            display: flex;
-            flex-direction: column;
-            box-shadow: 2px 0 5px rgba(0,0,0,0.1);
-            overflow-y: auto; /* サイドバーのコンテンツがはみ出したらスクロール */
-            flex-shrink: 0; /* 縮まないようにする */
-        }
-        #sidebar h3 {
-            margin-top: 0;
-            margin-bottom: 15px;
-            color: #f8f9fa;
-        }
-        #user-info {
-            margin-bottom: 20px;
-            padding-bottom: 15px;
-            border-bottom: 1px solid #495057;
-        }
-        #username-display {
-            font-size: 1.2em;
-            font-weight: bold;
-            margin-bottom: 10px;
-            color: #e9ecef;
-        }
-        .user-action-buttons button {
-            background-color: #007bff;
-            color: white;
-            border: none;
-            padding: 8px 12px;
-            border-radius: 4px;
-            cursor: pointer;
-            margin-right: 5px;
-            font-size: 0.9em;
-            transition: background-color 0.3s ease;
-        }
-        .user-action-buttons button:hover {
-            background-color: #0056b3;
-        }
-        #logout-button {
-            background-color: #dc3545;
-        }
-        #logout-button:hover {
-            background-color: #c82333;
-        }
-
-        #room-list, #online-users {
-            list-style: none;
-            padding: 0;
-            margin-bottom: 20px;
-        }
-        #room-list li, #online-users li {
-            padding: 8px 0;
-            cursor: pointer;
-            border-bottom: 1px solid #495057;
-            transition: background-color 0.2s ease;
-            display: flex;
-            align-items: center;
-        }
-        #room-list li:hover, #online-users li:hover {
-            background-color: #495057;
-        }
-        #room-list li.active, #online-users li.active {
-            background-color: #007bff;
-            font-weight: bold;
-        }
-        .user-status-dot {
-            width: 8px;
-            height: 8px;
-            border-radius: 50%;
-            background-color: grey; /* デフォルト */
-            margin-right: 8px;
-            flex-shrink: 0;
-        }
-        .user-status-dot.online {
-            background-color: #28a745; /* 緑色 */
-        }
-        .user-status-dot.offline {
-            background-color: #ffc107; /* 黄色 */
-        }
-        .dm-badge {
-            margin-left: auto;
-            background-color: #17a2b8;
-            color: white;
-            padding: 2px 6px;
-            border-radius: 10px;
-            font-size: 0.7em;
-        }
-
-        #main-content {
-            flex-grow: 1;
-            display: flex;
-            flex-direction: column;
-            background-color: #ffffff;
-            box-shadow: -2px 0 5px rgba(0,0,0,0.1);
-        }
-        #chat-header {
-            padding: 15px;
-            background-color: #007bff;
-            color: white;
-            font-size: 1.3em;
-            font-weight: bold;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            flex-shrink: 0;
-        }
-        #chat-area {
-            flex-grow: 1;
-            padding: 15px;
-            overflow-y: auto;
-            display: flex;
-            flex-direction: column-reverse; /* 最新メッセージが下に来るように */
-            border-bottom: 1px solid #eee;
-        }
-        .message-item {
-            margin-bottom: 10px;
-            padding: 8px 12px;
-            border-radius: 8px;
-            word-wrap: break-word;
-            max-width: 80%;
-        }
-        .message-item.system {
-            background-color: #e9ecef;
-            color: #495057;
-            text-align: center;
-        }
-        .message-item.sent {
-            background-color: #d4edda;
-            align-self: flex-end;
-            text-align: right;
-        }
-        .message-item.received {
-            background-color: #e2e3e5;
-            align-self: flex-start;
-            text-align: left;
-        }
-        .message-item .username {
-            font-weight: bold;
-            margin-bottom: 5px;
-            display: block;
-        }
-        .message-item .timestamp {
-            font-size: 0.8em;
-            color: #777;
-            margin-top: 5px;
-            display: block;
-        }
-        .message-item img {
-            max-width: 100%;
-            height: auto;
-            border-radius: 4px;
-            margin-top: 5px;
-        }
-
-        #message-input-area {
-            display: flex;
-            padding: 15px;
-            background-color: #f8f9fa;
-            border-top: 1px solid #eee;
-            flex-shrink: 0;
-        }
-        #message-input {
-            flex-grow: 1;
-            padding: 10px;
-            border: 1px solid #ddd;
-            border-radius: 4px;
-            font-size: 1em;
-            margin-right: 10px;
-            resize: none; /* テキストエリアのリサイズを無効化 */
-            overflow-y: auto; /* 高さが増えるように */
-            max-height: 100px; /* 最大の高さ */
-        }
-        #send-button, #file-upload-button {
-            background-color: #28a745;
-            color: white;
-            border: none;
-            padding: 10px 15px;
-            border-radius: 4px;
-            cursor: pointer;
-            font-size: 1em;
-            margin-left: 5px;
-            transition: background-color 0.3s ease;
-        }
-        #send-button:hover, #file-upload-button:hover {
-            background-color: #218838;
-        }
-        #file-input {
-            display: none; /* 実際のファイル選択ボタンは非表示 */
-        }
-        #pinned-message {
-            background-color: #fff3cd; /* 黄色 */
-            color: #856404;
-            padding: 10px 15px;
-            margin-bottom: 10px;
-            border-left: 5px solid #ffc107;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            font-size: 0.9em;
-            flex-shrink: 0;
-            display: none; /* 初期は非表示 */
-        }
-        #unpin-button {
-            background-color: #ffc107;
-            color: #856404;
-            border: 1px solid #856404;
-            padding: 5px 10px;
-            border-radius: 4px;
-            cursor: pointer;
-            margin-left: 10px;
-        }
-        #unpin-button:hover {
-            background-color: #e0a800;
-        }
-
-        /* モーダル */
-        .modal {
-            display: none;
-            position: fixed;
-            z-index: 1;
-            left: 0;
-            top: 0;
-            width: 100%;
-            height: 100%;
-            overflow: auto;
-            background-color: rgba(0,0,0,0.4);
-            justify-content: center;
-            align-items: center;
-        }
-        .modal-content {
-            background-color: #fefefe;
-            margin: auto;
-            padding: 20px;
-            border: 1px solid #888;
-            width: 80%;
-            max-width: 400px;
-            border-radius: 8px;
-            box-shadow: 0 5px 15px rgba(0,0,0,0.3);
-            text-align: center;
-        }
-        .close-button {
-            color: #aaa;
-            float: right;
-            font-size: 28px;
-            font-weight: bold;
-        }
-        .close-button:hover,
-        .close-button:focus {
-            color: black;
-            text-decoration: none;
-            cursor: pointer;
-        }
+        /* ここにあなたのCSSを記述 */
+        body { font-family: Arial, sans-serif; margin: 0; padding: 20px; background-color: #f4f4f4; }
+        #auth-section { background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); max-width: 400px; margin: 20px auto; }
+        #chat-section { background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); max-width: 800px; margin: 20px auto; display: none; }
+        #messages { border: 1px solid #ddd; padding: 10px; height: 300px; overflow-y: scroll; margin-bottom: 10px; }
+        .message { margin-bottom: 5px; }
+        .message .username { font-weight: bold; }
+        #online-users { border: 1px solid #ddd; padding: 10px; margin-top: 10px; }
+        .online-user { color: green; }
+        form { display: flex; }
+        input[type="text"] { flex-grow: 1; padding: 8px; border: 1px solid #ddd; border-radius: 4px 0 0 4px; }
+        button { padding: 8px 15px; background-color: #007bff; color: white; border: none; border-radius: 0 4px 4px 0; cursor: pointer; }
+        button:hover { background-color: #0056b3; }
     </style>
 </head>
 <body>
-    <div id="sidebar">
-        <h3>ユーザー情報</h3>
-        <div id="user-info">
-            <p id="username-display"></p>
-            <div class="user-action-buttons">
-                <button id="change-username-button">ユーザー名変更</button>
-                <button id="logout-button">ログアウト</button>
-            </div>
+
+    <div id="auth-section">
+        <h2>ログイン / 登録</h2>
+        <p id="auth-message" style="color: red;"></p>
+        <div>
+            <label for="username">ユーザー名:</label>
+            <input type="text" id="username" required><br><br>
+            <label for="password">パスワード:</label>
+            <input type="password" id="password" required><br><br>
+            <button id="login-button">ログイン</button>
+            <button id="register-button">登録</button>
         </div>
-
-        <h3>公開ルーム</h3>
-        <ul id="room-list">
-            <li data-room-name="雑談部屋" data-room-type="public" class="active">雑談部屋</li>
-            <li data-room-name="勉強部屋" data-room-type="public">勉強部屋</li>
-            <li data-room-name="ゲーム部屋" data-room-type="public">ゲーム部屋</li>
-        </ul>
-
-        <h3>オンラインユーザー</h3>
-        <ul id="online-users">
-            </ul>
+        <hr>
+        <button id="guest-button">ゲストで参加</button>
     </div>
 
-    <div id="main-content">
-        <div id="chat-header">
-            <span id="current-room-name">雑談部屋</span>
-            <button id="pin-message-button" style="background-color: #ffc107; color: #333; margin-left: 10px;">ピン留め</button>
-        </div>
-        <div id="pinned-message">
-            <span id="pinned-message-text"></span>
-            <button id="unpin-button">解除</button>
-        </div>
-        <div id="chat-area">
-            </div>
-        <div id="message-input-area">
-            <textarea id="message-input" placeholder="メッセージを入力..." rows="1"></textarea>
-            <input type="file" id="file-input" accept="image/*, video/*, .pdf, .txt">
-            <button id="file-upload-button">ファイル</button>
-            <button id="send-button">送信</button>
-        </div>
+    <div id="chat-section">
+        <h2>チャットルーム - <span id="current-username"></span></h2>
+        <button id="logout-button">ログアウト</button>
+        <div id="messages"></div>
+        <form id="form">
+            <input id="input" autocomplete="off" placeholder="メッセージを入力..." /><button>送信</button>
+        </form>
+        <h3>オンラインユーザー:</h3>
+        <div id="online-users"></div>
     </div>
 
-    <div id="username-modal" class="modal">
-        <div class="modal-content">
-            <span class="close-button">&times;</span>
-            <h2>ユーザー名変更</h2>
-            <input type="text" id="new-username-input" placeholder="新しいユーザー名" style="width: calc(100% - 20px); padding: 10px; margin-bottom: 15px; border: 1px solid #ddd; border-radius: 4px;">
-            <button id="confirm-change-username">変更する</button>
-            <div id="username-change-message" class="message" style="display: none;"></div>
-        </div>
-    </div>
-
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.5/socket.io.min.js"></script>
     <script>
-        const socket = io(); // Socket.IO接続
-        let currentRoom = '雑談部屋'; // 初期ルーム
-        let currentRoomType = 'public'; // 初期ルームタイプ
-        let currentDmTargetUserId = null; // 現在のDM相手のID
-        let currentDmTargetUsername = null; // 現在のDM相手のユーザー名
-        let myUserId = ''; // 自分のユーザーID
-        let myUsername = ''; // 自分のユーザー名
-        let isGuest = false; // 自分がゲストかどうか
+        // RenderにデプロイされたあなたのアプリのURLを設定してください
+        // 例: const SERVER_URL = "https://chatapp-s-fnyy.onrender.com";
+        const SERVER_URL = "https://chatapp-s-fnyy.onrender.com"; // あなたの実際のRender URLに置き換えてください
 
-        const usernameDisplay = document.getElementById('username-display');
-        const changeUsernameButton = document.getElementById('change-username-button');
+        let socket; // Socket.IOインスタンスをグローバルに保持
+
+        // DOM要素の取得
+        const authSection = document.getElementById('auth-section');
+        const chatSection = document.getElementById('chat-section');
+        const authMessage = document.getElementById('auth-message');
+        const usernameInput = document.getElementById('username');
+        const passwordInput = document.getElementById('password');
+        const loginButton = document.getElementById('login-button');
+        const registerButton = document.getElementById('register-button');
+        const guestButton = document.getElementById('guest-button');
         const logoutButton = document.getElementById('logout-button');
-        const roomList = document.getElementById('room-list');
-        const onlineUsersList = document.getElementById('online-users');
-        const chatHeader = document.getElementById('chat-header');
-        const currentRoomNameDisplay = document.getElementById('current-room-name');
-        const chatArea = document.getElementById('chat-area');
-        const messageInput = document.getElementById('message-input');
-        const sendButton = document.getElementById('send-button');
-        const fileInput = document.getElementById('file-input');
-        const fileUploadButton = document.getElementById('file-upload-button');
-        const pinMessageButton = document.getElementById('pin-message-button');
-        const pinnedMessageDiv = document.getElementById('pinned-message');
-        const pinnedMessageText = document.getElementById('pinned-message-text');
-        const unpinButton = document.getElementById('unpin-button');
+        const currentUsernameSpan = document.getElementById('current-username');
+        const messagesDiv = document.getElementById('messages');
+        const form = document.getElementById('form');
+        const input = document.getElementById('input');
+        const onlineUsersDiv = document.getElementById('online-users');
 
-        // モーダル要素
-        const usernameModal = document.getElementById('username-modal');
-        const closeButton = usernameModal.querySelector('.close-button');
-        const newUsernameInput = document.getElementById('new-username-input');
-        const confirmChangeUsernameButton = document.getElementById('confirm-change-username');
-        const usernameChangeMessage = document.getElementById('username-change-message');
+        let currentUserId = null;
+        let currentUsername = null;
+        let isGuestUser = false;
 
-        // 認証チェック
-        async function checkAuth() {
+        // =========================================================
+        // 認証とUIセットアップ
+        // =========================================================
+
+        async function checkAuthAndSetupUI() {
             try {
-                // ゲストログインとしてチャットにアクセスする場合、/check-auth?guest=true を使用
-                // 既にログイン済みであれば、通常の /check-auth
-                const url = new URL('/check-auth', window.location.origin);
-                // ゲストログインページから来た場合はguest=trueを付与
-                const params = new URLSearchParams(window.location.search);
-                if (params.get('guest') === 'true') {
-                    url.searchParams.set('guest', 'true');
-                }
-
-                const response = await fetch(url.toString(), {
+                // withCredentials: true を設定することで、Cookieをサーバーに送信
+                const response = await fetch(`${SERVER_URL}/check-auth`, {
                     method: 'GET',
-                    headers: { 'Cache-Control': 'no-cache' } // キャッシュを使わない
+                    credentials: 'include' // これが重要！Cookieを送信する
                 });
+                const data = await response.json(); // JSONとして解析
 
-                if (!response.ok) {
-                    console.error('認証チェックエラー: レスポンスが不正です。');
-                    window.location.href = '/index.html'; // 認証失敗したらログインページへ
+                if (response.ok && data.isAuthenticated) {
+                    console.log("認証成功:", data);
+                    currentUserId = data.userId;
+                    currentUsername = data.username;
+                    isGuestUser = data.isGuest;
+                    
+                    currentUsernameSpan.textContent = data.username; // ユーザー名をUIに表示
+                    authSection.style.display = 'none'; // 認証セクションを非表示
+                    chatSection.style.display = 'block'; // チャットセクションを表示
+                    
+                    // 認証後、Socket.IOを初期化/再接続
+                    initSocketIo();
+                    loadMessages(); // 既存のメッセージをロードする関数 (もしあれば)
+
+                } else {
+                    console.log("認証失敗またはセッションなし:", data.message);
+                    currentUserId = null;
+                    currentUsername = null;
+                    isGuestUser = false;
+                    authMessage.textContent = data.message || "認証が必要です。";
+                    authSection.style.display = 'block'; // 認証セクションを表示
+                    chatSection.style.display = 'none'; // チャットセクションを非表示
+
+                    // 認証されていない場合はSocket.IO接続を切断
+                    if (socket) {
+                        socket.disconnect();
+                    }
+                }
+            } catch (error) {
+                console.error("認証チェックエラー:", error);
+                authMessage.textContent = "認証チェック中にエラーが発生しました。サーバーに問題がある可能性があります。";
+                currentUserId = null;
+                currentUsername = null;
+                isGuestUser = false;
+                authSection.style.display = 'block';
+                chatSection.style.display = 'none';
+                if (socket) {
+                    socket.disconnect();
+                }
+            }
+        }
+
+        // ページロード時に認証チェックを実行
+        document.addEventListener('DOMContentLoaded', checkAuthAndSetupUI);
+
+
+        // =========================================================
+        // Socket.IO 初期化とイベントハンドリング
+        // =========================================================
+
+        function initSocketIo() {
+            if (socket && socket.connected) {
+                console.log("Socket.IOは既に接続されています。再初期化しません。");
+                return;
+            }
+
+            console.log("Socket.IOを初期化します...");
+            // ここが非常に重要！
+            // withCredentials: true を設定することで、セッションCookieをWebSocket接続時にも送信します。
+            socket = io(SERVER_URL, {
+                withCredentials: true,
+                transports: ['websocket', 'polling'] // 優先順位: websocket -> polling
+            });
+
+            socket.on('connect', () => {
+                console.log('Socket.IOに接続しました！');
+                // 接続時にユーザー情報をサーバーに送信する場合
+                // socket.emit('user_connected', { userId: currentUserId, username: currentUsername });
+            });
+
+            socket.on('disconnect', () => {
+                console.log('Socket.IOから切断されました。');
+            });
+
+            // サーバーから再認証が要求された場合
+            socket.on('reauthenticate', () => {
+                console.log('サーバーから再認証要求がありました。ログインページにリダイレクトします。');
+                alert('セッションが切れました。再ログインしてください。');
+                checkAuthAndSetupUI(); // 再度認証チェックを実行
+                // window.location.href = '/login.html'; // 別のログインページにリダイレクトする場合
+            });
+
+            socket.on('chat message', (msg) => {
+                const item = document.createElement('div');
+                item.classList.add('message');
+                const timestamp = new Date(msg.timestamp).toLocaleTimeString();
+                item.innerHTML = `<span class="username">${msg.username}</span> (${timestamp}): ${msg.content}`;
+                messagesDiv.appendChild(item);
+                messagesDiv.scrollTop = messagesDiv.scrollHeight; // スクロールを一番下へ
+            });
+
+            socket.on('online users', (users) => {
+                onlineUsersDiv.innerHTML = ''; // リストをクリア
+                if (users.length === 0) {
+                    onlineUsersDiv.textContent = '現在オンラインユーザーはいません。';
                     return;
                 }
-
-                const data = await response.json();
-
-                if (data.authenticated) {
-                    myUsername = data.username;
-                    myUserId = data.userId;
-                    isGuest = false;
-                    usernameDisplay.textContent = `ようこそ、${myUsername} さん！`;
-                    pinMessageButton.style.display = 'inline-block'; // ログイン済みならピン留めボタン表示
-                } else if (data.isGuest) {
-                    myUsername = data.username;
-                    myUserId = data.userId;
-                    isGuest = true;
-                    usernameDisplay.textContent = `ようこそ、${myUsername} (ゲスト) さん！`;
-                    changeUsernameButton.style.display = 'none'; // ゲストはユーザー名変更不可
-                    pinMessageButton.style.display = 'none'; // ゲストはピン留め不可
-                } else {
-                    console.warn('認証されていません。ログインページへリダイレクトします。');
-                    window.location.href = '/index.html';
-                }
-                // 初回ルーム参加
-                socket.emit('joinRoom', currentRoom, currentRoomType, currentDmTargetUserId);
-
-            } catch (error) {
-                console.error('認証チェックエラー:', error);
-                window.location.href = '/index.html'; // エラー時もログインページへ
-            }
-        }
-
-        // ページロード時に認証チェック
-        document.addEventListener('DOMContentLoaded', checkAuth);
-
-        // メッセージ表示関数
-        function displayMessage(msg) {
-            const messageElement = document.createElement('div');
-            messageElement.classList.add('message-item');
-
-            const timestamp = new Date(msg.timestamp).toLocaleString();
-            const isMyMessage = msg.userId === myUserId;
-            const isSystemMessage = msg.user === 'システム';
-
-            if (isSystemMessage) {
-                messageElement.classList.add('system');
-                messageElement.innerHTML = `<span>${msg.text}</span><span class="timestamp">${timestamp}</span>`;
-            } else if (isMyMessage) {
-                messageElement.classList.add('sent');
-                messageElement.innerHTML = `
-                    <span class="username">あなた</span>
-                    <span>${msg.text || ''}</span>
-                    ${msg.file ? `<img src="${msg.file}" alt="ファイル" />` : ''}
-                    <span class="timestamp">${timestamp}</span>
-                `;
-            } else {
-                messageElement.classList.add('received');
-                messageElement.innerHTML = `
-                    <span class="username">${msg.user}</span>
-                    <span>${msg.text || ''}</span>
-                    ${msg.file ? `<img src="${msg.file}" alt="ファイル" />` : ''}
-                    <span class="timestamp">${timestamp}</span>
-                `;
-            }
-
-            chatArea.prepend(messageElement); // 下から上にメッセージを追加
-            // chatArea.scrollTop = chatArea.scrollHeight; // 最新のメッセージまでスクロール
-            // (flex-direction: column-reverse; の場合、自動で下に来るので不要)
-        }
-
-        // メッセージ履歴表示関数
-        function displayMessageHistory(messages) {
-            chatArea.innerHTML = ''; // 既存のメッセージをクリア
-            messages.reverse().forEach(msg => displayMessage(msg)); // 最新が下になるよう逆順で表示
-        }
-
-        // オンラインユーザーリスト更新
-        socket.on('updateUserList', (users) => {
-            onlineUsersList.innerHTML = '';
-            users.forEach(user => {
-                const userElement = document.createElement('li');
-                const isOnline = user.online; // OnlineUsers Mapから来ているので常にtrue
-                const isMe = user.id === myUserId;
-                const isRegisteredUser = !user.username.startsWith('ゲスト-'); // ゲストユーザーかどうか
-                
-                userElement.innerHTML = `
-                    <span class="user-status-dot ${isOnline ? 'online' : 'offline'}"></span>
-                    <span>${user.username} ${isMe ? '(あなた)' : ''}</span>
-                    ${isRegisteredUser && !isMe ? '<span class="dm-badge">DM</span>' : ''}
-                `;
-                userElement.dataset.userId = user.id;
-                userElement.dataset.username = user.username;
-                userElement.dataset.isGuest = !isRegisteredUser; // ゲストユーザーかどうかをデータ属性に保存
-
-                if (user.id !== myUserId) { // 自分自身にはDMボタンを表示しない
-                    userElement.addEventListener('click', () => {
-                        joinRoom(user.id, 'dm', user.username);
-                    });
-                }
-                onlineUsersList.appendChild(userElement);
-            });
-        });
-
-        // ルーム切り替え関数
-        function joinRoom(name, type, dmTargetUsername = null, dmTargetUserId = null) {
-            // 現在のルームのactiveクラスを解除
-            const prevActiveRoom = document.querySelector(`#room-list li.active`);
-            if (prevActiveRoom) prevActiveRoom.classList.remove('active');
-            const prevActiveUser = document.querySelector(`#online-users li.active`);
-            if (prevActiveUser) prevActiveUser.classList.remove('active');
-
-            currentRoom = name;
-            currentRoomType = type;
-            currentDmTargetUsername = dmTargetUsername;
-            currentDmTargetUserId = dmTargetUserId;
-
-            if (type === 'public') {
-                currentRoomNameDisplay.textContent = name;
-                document.querySelector(`#room-list li[data-room-name="${name}"]`).classList.add('active');
-                pinMessageButton.style.display = isGuest ? 'none' : 'inline-block'; // ゲストはピン留め不可
-            } else if (type === 'dm') {
-                currentRoomNameDisplay.textContent = `DM: ${dmTargetUsername}`;
-                // DMユーザーリストアイテムにactiveクラスを付ける (もしあれば)
-                const dmUserElement = document.querySelector(`#online-users li[data-user-id="${dmTargetUserId}"]`);
-                if (dmUserElement) dmUserElement.classList.add('active');
-                pinMessageButton.style.display = 'none'; // DMではピン留め不可
-            }
-
-            // Socket.IOにルーム参加を通知
-            socket.emit('joinRoom', currentRoom, currentRoomType, currentDmTargetUserId);
-            hidePinnedMessage(); // ルーム切り替え時にピン留めメッセージを非表示
-        }
-
-        // ルームリストのクリックイベント
-        roomList.addEventListener('click', (event) => {
-            const li = event.target.closest('li');
-            if (li) {
-                const roomName = li.dataset.roomName;
-                const roomType = li.dataset.roomType;
-                if (roomName && roomType === 'public') {
-                    joinRoom(roomName, roomType);
-                }
-            }
-        });
-
-        // メッセージ送信
-        sendButton.addEventListener('click', () => {
-            sendMessage();
-        });
-
-        messageInput.addEventListener('keypress', (e) => {
-            if (e.key === 'Enter' && !e.shiftKey) { // Shift+Enterで改行
-                e.preventDefault(); // デフォルトの改行を防止
-                sendMessage();
-            }
-        });
-
-        function sendMessage() {
-            const text = messageInput.value.trim();
-            if (!text) return;
-
-            const msgData = {
-                text: text,
-                room: currentRoom,
-                dm: currentRoomType === 'dm',
-                dmTargetUser: currentDmTargetUsername,
-                dmTargetUserId: currentDmTargetUserId
-            };
-            socket.emit('sendMessage', msgData); // Socket.IOでメッセージ送信
-
-            messageInput.value = ''; // 入力欄をクリア
-            messageInput.style.height = 'auto'; // テキストエリアの高さをリセット
-        }
-
-        // テキストエリアの高さ自動調整
-        messageInput.addEventListener('input', () => {
-            messageInput.style.height = 'auto';
-            messageInput.style.height = (messageInput.scrollHeight) + 'px';
-        });
-
-        // ファイルアップロードボタン
-        fileUploadButton.addEventListener('click', () => {
-            fileInput.click(); // 非表示のファイル入力ボタンをクリック
-        });
-
-        fileInput.addEventListener('change', async (event) => {
-            const file = event.target.files[0];
-            if (!file) return;
-
-            if (isGuest) {
-                alert('ゲストユーザーはファイルをアップロードできません。');
-                return;
-            }
-
-            const formData = new FormData();
-            formData.append('file', file);
-            formData.append('room', currentRoom);
-            if (currentRoomType === 'dm' && currentDmTargetUserId) {
-                formData.append('dmTargetUser', currentDmTargetUsername);
-                formData.append('dmTargetUserId', currentDmTargetUserId);
-            }
-
-            try {
-                const response = await fetch('/upload', {
-                    method: 'POST',
-                    body: formData
+                users.forEach(user => {
+                    const userElem = document.createElement('div');
+                    userElem.classList.add('online-user');
+                    userElem.textContent = user.username;
+                    onlineUsersDiv.appendChild(userElem);
                 });
-                const data = await response.json();
-                if (!data.success) {
-                    alert('ファイルのアップロードに失敗しました: ' + data.error);
-                }
-                // ファイルアップロード成功後、サーバーがメッセージをブロードキャストするのでここではdisplayMessageは呼ばない
-            } catch (error) {
-                console.error('ファイルアップロードエラー:', error);
-                alert('ファイルアップロード中にエラーが発生しました。');
-            }
-            fileInput.value = ''; // ファイル選択をクリア
-        });
+            });
+        }
 
+        // =========================================================
+        // フォームとボタンのイベントリスナー
+        // =========================================================
 
-        // ログアウト処理
-        logoutButton.addEventListener('click', async () => {
-            try {
-                const response = await fetch('/logout', { method: 'POST' });
-                const data = await response.json();
-                if (data.success) {
-                    alert(data.message);
-                    window.location.href = '/index.html'; // ログアウト成功したらログインページへ
-                } else {
-                    alert('ログアウトに失敗しました: ' + data.message);
-                }
-            } catch (error) {
-                console.error('ログアウトエラー:', error);
-                alert('ログアウト中にエラーが発生しました。');
+        form.addEventListener('submit', (e) => {
+            e.preventDefault();
+            if (input.value && socket && socket.connected) {
+                socket.emit('chat message', input.value);
+                input.value = '';
+            } else if (!socket || !socket.connected) {
+                alert('チャットサーバーに接続されていません。再読み込みまたはログインをお試しください。');
             }
         });
 
-        // ユーザー名変更モーダル表示
-        changeUsernameButton.addEventListener('click', () => {
-            newUsernameInput.value = myUsername; // 現在のユーザー名をセット
-            usernameModal.style.display = 'flex'; // flexで中央寄せ
-            hideMessage(usernameChangeMessage);
-        });
-
-        // モーダルを閉じる
-        closeButton.addEventListener('click', () => {
-            usernameModal.style.display = 'none';
-        });
-
-        // モーダルの外側をクリックで閉じる
-        window.addEventListener('click', (event) => {
-            if (event.target === usernameModal) {
-                usernameModal.style.display = 'none';
-            }
-        });
-
-        // ユーザー名変更確認
-        confirmChangeUsernameButton.addEventListener('click', async () => {
-            const newUsername = newUsernameInput.value.trim();
-            if (!newUsername) {
-                showMessage(usernameChangeMessage, 'error', '新しいユーザー名を入力してください。');
+        loginButton.addEventListener('click', async () => {
+            const username = usernameInput.value;
+            const password = passwordInput.value;
+            if (!username || !password) {
+                authMessage.textContent = "ユーザー名とパスワードを入力してください。";
                 return;
             }
 
             try {
-                const response = await fetch('/change-username', {
+                const response = await fetch(`${SERVER_URL}/login`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ newUsername })
+                    body: JSON.stringify({ username, password }),
+                    credentials: 'include' // これも重要！Cookieを送信する
                 });
                 const data = await response.json();
 
-                if (data.success) {
-                    showMessage(usernameChangeMessage, 'success', data.message);
-                    myUsername = newUsername; // ローカルのユーザー名を更新
-                    usernameDisplay.textContent = `ようこそ、${myUsername} さん！`;
-                    // サーバーがオンラインユーザーリストとシステムメッセージを送信する
-                    setTimeout(() => {
-                        usernameModal.style.display = 'none';
-                    }, 1500);
+                if (response.ok) {
+                    authMessage.textContent = data.message;
+                    checkAuthAndSetupUI(); // ログイン成功後に認証チェックとUI更新
                 } else {
-                    showMessage(usernameChangeMessage, 'error', data.message);
+                    authMessage.textContent = data.message || "ログイン失敗。";
                 }
             } catch (error) {
-                console.error('ユーザー名変更エラー:', error);
-                showMessage(usernameChangeMessage, 'error', 'ユーザー名変更中にエラーが発生しました。');
+                console.error("ログインエラー:", error);
+                authMessage.textContent = "ログイン中にエラーが発生しました。";
             }
         });
 
-        function showMessage(element, type, msg) {
-            element.textContent = msg;
-            element.className = `message ${type}`;
-            element.style.display = 'block';
-        }
-
-        function hideMessage(element) {
-            element.style.display = 'none';
-        }
-
-        // ピン留めメッセージ表示/非表示関数
-        function displayPinnedMessage(message) {
-            if (message) {
-                pinnedMessageText.textContent = `ピン留め: ${message.user}: ${message.text}`;
-                pinnedMessageDiv.style.display = 'flex';
-                // ピン留め解除ボタンは認証済みユーザーのみ表示
-                unpinButton.style.display = isGuest ? 'none' : 'inline-block';
-            } else {
-                hidePinnedMessage();
+        registerButton.addEventListener('click', async () => {
+            const username = usernameInput.value;
+            const password = passwordInput.value;
+            if (!username || !password) {
+                authMessage.textContent = "ユーザー名とパスワードを入力してください。";
+                return;
             }
-        }
 
-        function hidePinnedMessage() {
-            pinnedMessageDiv.style.display = 'none';
-            pinnedMessageText.textContent = '';
-        }
+            try {
+                const response = await fetch(`${SERVER_URL}/register`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ username, password }),
+                    credentials: 'include' // これも重要！Cookieを送信する
+                });
+                const data = await response.json();
 
-        // ピン留めボタンクリック
-        pinMessageButton.addEventListener('click', () => {
-            // 最新のメッセージを取得 (chatAreaの一番新しいメッセージ)
-            const latestMessageElement = chatArea.lastElementChild; // flex-direction: column-reverse; のため
-            if (latestMessageElement && latestMessageElement.classList.contains('message-item') && !latestMessageElement.classList.contains('system')) {
-                // ここでメッセージの内容を整形してサーバーに送る
-                const messageText = latestMessageElement.querySelector('span:not(.username):not(.timestamp)')?.textContent || '';
-                const messageUser = latestMessageElement.querySelector('.username')?.textContent;
-                const messageTimestamp = latestMessageElement.querySelector('.timestamp')?.textContent;
-
-                const messageToPin = {
-                    user: messageUser,
-                    text: messageText,
-                    timestamp: messageTimestamp,
-                };
-                socket.emit('pinMessage', { room: currentRoom, message: messageToPin });
-            } else {
-                alert('ピン留めするメッセージが見つからないか、システムメッセージです。');
+                authMessage.textContent = data.message;
+                if (response.ok) {
+                    usernameInput.value = ''; // 登録成功したらフォームをクリア
+                    passwordInput.value = '';
+                }
+            } catch (error) {
+                console.error("登録エラー:", error);
+                authMessage.textContent = "登録中にエラーが発生しました。";
             }
         });
 
-        // ピン留め解除ボタンクリック
-        unpinButton.addEventListener('click', () => {
-            socket.emit('unpinMessage', currentRoom);
+        guestButton.addEventListener('click', async () => {
+            // ゲスト参加は /check-auth エンドポイントに依存
+            // `checkAuthAndSetupUI` が未認証なら自動的にゲストを作成する
+            checkAuthAndSetupUI();
         });
 
-        // =======================================================================
-        // Socket.IO イベントリスナー
-        // =======================================================================
+        logoutButton.addEventListener('click', async () => {
+            try {
+                const response = await fetch(`${SERVER_URL}/logout`, {
+                    method: 'POST',
+                    credentials: 'include' // Cookieを送信する
+                });
+                const data = await response.json();
 
-        socket.on('connect', () => {
-            console.log('Socket.IOに接続しました。');
-            // 接続後、再度認証状態をチェックし、ルームに参加
-            // chat.htmlのロード時のcheckAuth()がこれを行う
-        });
-
-        socket.on('disconnect', () => {
-            console.log('Socket.IOから切断されました。');
-        });
-
-        socket.on('message', (msg) => {
-            // 現在のルームのメッセージのみ表示
-            const isTargetedDm = msg.dm && ((msg.userId === myUserId && msg.dmTargetUserId === currentDmTargetUserId) || (msg.userId === currentDmTargetUserId && msg.dmTargetUserId === myUserId));
-            const isPublicMessageForCurrentRoom = !msg.dm && msg.room === currentRoomType && msg.room === currentRoom;
-
-            if (isTargetedDm || isPublicMessageForCurrentRoom || msg.room === "システム通知") {
-                displayMessage(msg);
+                if (response.ok) {
+                    alert(data.message);
+                    // UIをリセットし、認証セクションを表示
+                    authSection.style.display = 'block';
+                    chatSection.style.display = 'none';
+                    messagesDiv.innerHTML = '';
+                    onlineUsersDiv.innerHTML = '';
+                    currentUserId = null;
+                    currentUsername = null;
+                    isGuestUser = false;
+                    usernameInput.value = '';
+                    passwordInput.value = '';
+                    authMessage.textContent = ''; // メッセージをクリア
+                    if (socket) {
+                        socket.disconnect(); // Socket.IOを切断
+                    }
+                } else {
+                    alert(data.message || "ログアウトに失敗しました。");
+                }
+            } catch (error) {
+                console.error("ログアウトエラー:", error);
+                alert("ログアウト中にエラーが発生しました。");
             }
         });
 
-        socket.on('messageHistory', (messages) => {
-            displayMessageHistory(messages);
-        });
+        // 既存のメッセージをロードする関数 (任意: 必要であればサーバーサイドから取得)
+        async function loadMessages() {
+            // メッセージAPIエンドポイントがあればここから取得
+            // 例: const response = await fetch(`${SERVER_URL}/messages`);
+            // const messages = await response.json();
+            // messages.forEach(msg => { /* メッセージをDOMに追加 */ });
+        }
 
-        socket.on('updatePinnedMessage', (data) => {
-            displayPinnedMessage(data.message);
-        });
-
-        socket.on('error', (errorMessage) => {
-            alert('エラー: ' + errorMessage);
-        });
-
-        socket.on('reauthenticate', () => {
-            console.warn('サーバーから再認証要求がありました。ログインページにリダイレクトします。');
-            alert('セッションが無効になったか、タイムアウトしました。再度ログインしてください。');
-            window.location.href = '/index.html';
-        });
-
-        // 初期ルームに参加
-        joinRoom(currentRoom, currentRoomType);
     </script>
 </body>
 </html>
