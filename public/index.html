@@ -3,264 +3,649 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ログイン・登録</title>
+    <title>チャットアプリ</title>
+    <link rel="stylesheet" href="style.css">
     <style>
-        body {
-            font-family: Arial, sans-serif;
+        /* デフォルトのスタイル (style.css がない場合のフォールバックや、基本的なレイアウト用) */
+        body { font-family: Arial, sans-serif; margin: 0; padding: 0; background-color: #f4f4f4; display: flex; height: 100vh; overflow: hidden; }
+
+        /* 全体コンテナ */
+        #app-container {
             display: flex;
-            justify-content: center;
-            align-items: center;
-            min-height: 100vh;
-            background-color: #f0f2f5;
-            margin: 0;
-            flex-direction: column;
-        }
-        .container {
-            background-color: #ffffff;
-            padding: 30px;
-            border-radius: 8px;
-            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
             width: 100%;
+            height: 100%;
+        }
+
+        /* 認証セクション */
+        #auth-section {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
             max-width: 400px;
-            box-sizing: border-box;
+            margin: auto; /* 中央寄せ */
             text-align: center;
         }
-        h2 {
-            color: #333;
-            margin-bottom: 25px;
-        }
-        .input-group {
-            margin-bottom: 15px;
-            text-align: left;
-        }
-        .input-group label {
-            display: block;
-            margin-bottom: 5px;
-            color: #555;
-            font-weight: bold;
-        }
-        .input-group input {
+        #auth-section input, #auth-section button {
             width: calc(100% - 20px);
             padding: 10px;
+            margin-bottom: 10px;
             border: 1px solid #ddd;
             border-radius: 4px;
-            font-size: 1em;
-            box-sizing: border-box;
         }
-        button {
-            width: 100%;
-            padding: 12px;
+        #auth-section button {
             background-color: #007bff;
             color: white;
             border: none;
-            border-radius: 4px;
-            font-size: 1.1em;
             cursor: pointer;
-            transition: background-color 0.3s ease;
-            margin-top: 10px;
         }
-        button:hover {
+        #auth-section button:hover {
             background-color: #0056b3;
         }
-        .message {
-            margin-top: 20px;
+        #auth-message { color: red; margin-bottom: 10px; }
+
+
+        /* チャットセクションのメインレイアウト */
+        #chat-section {
+            display: flex; /* Flexboxでサイドバーとメインコンテンツを横並び */
+            width: 100%;
+            height: 100%;
+            display: none; /* 初期は非表示 */
+        }
+
+        /* 左サイドバー: 部屋リストとオンラインユーザー */
+        #sidebar {
+            width: 250px;
+            background-color: #e9ecef;
+            padding: 20px;
+            box-shadow: 2px 0 5px rgba(0,0,0,0.1);
+            display: flex;
+            flex-direction: column;
+            overflow-y: auto;
+        }
+        #sidebar h3 {
+            margin-top: 0;
+            color: #333;
+        }
+        #room-list ul {
+            list-style: none;
+            padding: 0;
+            margin-bottom: 20px;
+        }
+        #room-list li {
             padding: 10px;
+            cursor: pointer;
+            border-bottom: 1px solid #ddd;
+        }
+        #room-list li:hover {
+            background-color: #dcdcdc;
+        }
+        #room-list li.active {
+            background-color: #007bff;
+            color: white;
+        }
+
+        #online-users-list ul {
+            list-style: none;
+            padding: 0;
+        }
+        #online-users-list li {
+            padding: 5px 0;
+            color: green;
+        }
+
+
+        /* メインチャットコンテンツ */
+        #main-chat-content {
+            flex-grow: 1; /* 残りのスペースを全て占める */
+            display: flex;
+            flex-direction: column;
+            background-color: #ffffff;
+        }
+
+        /* チャットヘッダー */
+        #chat-header {
+            padding: 15px 20px;
+            background-color: #007bff;
+            color: white;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        #chat-header h2 {
+            margin: 0;
+            font-size: 1.5em;
+        }
+        #chat-header button {
+            background-color: #dc3545;
+            color: white;
+            border: none;
+            padding: 8px 15px;
             border-radius: 4px;
-            font-size: 0.9em;
+            cursor: pointer;
         }
-        .message.success {
-            background-color: #d4edda;
-            color: #155724;
-            border: 1px solid #c3e6cb;
+        #chat-header button:hover {
+            background-color: #c82333;
         }
-        .message.error {
-            background-color: #f8d7da;
-            color: #721c24;
-            border: 1px solid #f5c6cb;
+
+        /* メッセージ表示エリア */
+        #messages {
+            flex-grow: 1; /* 縦方向に残りのスペースを占める */
+            padding: 20px;
+            overflow-y: auto; /* メッセージが多い場合にスクロール */
+            background-color: #e9ebee; /* チャット背景色 */
         }
-        .guest-login-area {
-            margin-top: 30px;
-            padding-top: 20px;
-            border-top: 1px solid #eee;
+        .message {
+            margin-bottom: 10px;
+            padding: 8px 12px;
+            border-radius: 8px;
+            max-width: 70%;
+            word-wrap: break-word; /* 長い単語の改行 */
         }
-        .guest-login-area button {
-            background-color: #6c757d;
+        .message.mine { /* 自分のメッセージ */
+            background-color: #dcf8c6;
+            margin-left: auto; /* 右寄せ */
+            text-align: right;
         }
-        .guest-login-area button:hover {
-            background-color: #5a6268;
+        .message.other { /* 他の人のメッセージ */
+            background-color: #ffffff;
+            margin-right: auto; /* 左寄せ */
+            border: 1px solid #e0e0e0;
         }
+        .message .username {
+            font-weight: bold;
+            color: #0056b3;
+            margin-bottom: 2px;
+            display: block; /* ユーザー名を独立した行に */
+        }
+        .message .timestamp {
+            font-size: 0.75em;
+            color: #777;
+            text-align: right;
+            display: block;
+            margin-top: 5px;
+        }
+        .message.mine .timestamp {
+            text-align: left; /* 自分のメッセージのタイムスタンプは左寄せにすることも可能 */
+        }
+
+
+        /* メッセージ入力フォーム */
+        #form-container {
+            padding: 15px 20px;
+            background-color: #f8f9fa;
+            border-top: 1px solid #ddd;
+            display: flex;
+            align-items: center;
+        }
+        #form-container form {
+            display: flex;
+            flex-grow: 1;
+            align-items: center;
+        }
+        #form-container #input {
+            flex-grow: 1;
+            padding: 10px;
+            border: 1px solid #ccc;
+            border-radius: 20px;
+            margin-right: 10px;
+        }
+        #form-container .file-input-button {
+            background-color: #28a745;
+            color: white;
+            border: none;
+            padding: 10px 15px;
+            border-radius: 20px;
+            cursor: pointer;
+            font-size: 1.2em;
+            margin-right: 10px;
+        }
+        #form-container .file-input-button:hover {
+            background-color: #218838;
+        }
+        #form-container button[type="submit"] {
+            background-color: #007bff;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 20px;
+            cursor: pointer;
+        }
+        #form-container button[type="submit"]:hover {
+            background-color: #0056b3;
+        }
+        /* ファイル入力要素自体は非表示 */
+        #file-input {
+            display: none;
+        }
+
     </style>
 </head>
 <body>
-    <div class="container">
-        <h2>ログイン</h2>
-        <div class="input-group">
-            <label for="loginUsername">ユーザー名:</label>
-            <input type="text" id="loginUsername" placeholder="ユーザー名" required>
-        </div>
-        <div class="input-group">
-            <label for="loginPassword">パスワード:</label>
-            <input type="password" id="loginPassword" placeholder="パスワード" required>
-        </div>
-        <button id="loginButton">ログイン</button>
-        <p style="margin-top: 20px; color: #555;">アカウントをお持ちでないですか？</p>
-        <button id="showRegisterButton">新規登録</button>
-        <div id="loginMessage" class="message" style="display: none;"></div>
 
-        <div class="guest-login-area">
-            <h3>ゲストログイン</h3>
-            <p>アカウントなしで一時的にチャットに参加します。</p>
-            <button id="guestLoginButton">ゲストとして参加</button>
-        </div>
-    </div>
+    <div id="app-container">
 
-    <div id="registerContainer" class="container" style="display: none; margin-top: 20px;">
-        <h2>新規登録</h2>
-        <div class="input-group">
-            <label for="registerUsername">ユーザー名:</label>
-            <input type="text" id="registerUsername" placeholder="ユーザー名" required>
+        <div id="auth-section">
+            <h2>ログイン / 登録</h2>
+            <p id="auth-message"></p>
+            <div>
+                <label for="username">ユーザー名:</label>
+                <input type="text" id="username" required><br>
+                <label for="password">パスワード:</label>
+                <input type="password" id="password" required><br>
+                <button id="login-button">ログイン</button>
+                <button id="register-button">登録</button>
+            </div>
+            <hr>
+            <button id="guest-button">ゲストで参加</button>
         </div>
-        <div class="input-group">
-            <label for="registerPassword">パスワード:</label>
-            <input type="password" id="registerPassword" placeholder="パスワード" required>
-        </div>
-        <div class="input-group">
-            <label for="confirmPassword">パスワード確認:</label>
-            <input type="password" id="confirmPassword" placeholder="パスワード確認" required>
-        </div>
-        <button id="registerButton">登録</button>
-        <p style="margin-top: 20px; color: #555;">既にアカウントをお持ちですか？</p>
-        <button id="showLoginButton">ログインページへ</button>
-        <div id="registerMessage" class="message" style="display: none;"></div>
-    </div>
 
+        <div id="chat-section">
+            <div id="sidebar">
+                <h3>チャットルーム</h3>
+                <div id="room-list">
+                    <ul>
+                        <li data-room-id="general" class="active">雑談部屋１</li>
+                        <li data-room-id="random">雑談部屋２</li>
+                        </ul>
+                </div>
+
+                <h3>オンラインユーザー:</h3>
+                <div id="online-users-list">
+                    <ul>
+                        </ul>
+                </div>
+            </div>
+
+            <div id="main-chat-content">
+                <div id="chat-header">
+                    <h2 id="current-room-name">雑談部屋１</h2>
+                    <div>
+                        <span id="current-username-display"></span>
+                        <button id="logout-button">ログアウト</button>
+                    </div>
+                </div>
+
+                <div id="messages">
+                    </div>
+
+                <div id="form-container">
+                    <form id="form">
+                        <button type="button" id="file-select-button" class="file-input-button">+</button>
+                        <input type="file" id="file-input">
+                        
+                        <input id="input" autocomplete="off" placeholder="メッセージを入力..." />
+                        <button type="submit">送信</button>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+    </div> <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.5/socket.io.min.js"></script>
     <script>
-        const loginContainer = document.querySelector('.container');
-        const registerContainer = document.getElementById('registerContainer');
-        const loginButton = document.getElementById('loginButton');
-        const registerButton = document.getElementById('registerButton');
-        const showRegisterButton = document.getElementById('showRegisterButton');
-        const showLoginButton = document.getElementById('showLoginButton');
-        const guestLoginButton = document.getElementById('guestLoginButton');
+        // RenderにデプロイされたあなたのアプリのURLを設定してください
+        const SERVER_URL = "https://chatapp-s-fnyy.onrender.com"; // あなたの実際のRender URLに置き換えてください
 
-        const loginUsernameInput = document.getElementById('loginUsername');
-        const loginPasswordInput = document.getElementById('loginPassword');
-        const registerUsernameInput = document.getElementById('registerUsername');
-        const registerPasswordInput = document.getElementById('registerPassword');
-        const confirmPasswordInput = document.getElementById('confirmPassword');
+        let socket; // Socket.IOインスタンスをグローバルに保持
 
-        const loginMessageDiv = document.getElementById('loginMessage');
-        const registerMessageDiv = document.getElementById('registerMessage');
+        // DOM要素の取得
+        const appContainer = document.getElementById('app-container');
+        const authSection = document.getElementById('auth-section');
+        const chatSection = document.getElementById('chat-section');
+        const authMessage = document.getElementById('auth-message');
+        const usernameInput = document.getElementById('username');
+        const passwordInput = document.getElementById('password');
+        const loginButton = document.getElementById('login-button');
+        const registerButton = document.getElementById('register-button');
+        const guestButton = document.getElementById('guest-button');
+        const logoutButton = document.getElementById('logout-button');
+        const currentUsernameDisplay = document.getElementById('current-username-display'); // ヘッダーのユーザー名表示
+        const messagesDiv = document.getElementById('messages');
+        const form = document.getElementById('form');
+        const input = document.getElementById('input');
+        const onlineUsersList = document.getElementById('online-users-list'); // UL要素を直接取得
+        const fileSelectButton = document.getElementById('file-select-button');
+        const fileInput = document.getElementById('file-input');
 
-        function showMessage(element, type, msg) {
-            element.textContent = msg;
-            element.className = `message ${type}`;
-            element.style.display = 'block';
+        // ルーム関連DOM要素
+        const roomListUl = document.querySelector('#room-list ul'); // 部屋リストのUL
+        const currentRoomNameDisplay = document.getElementById('current-room-name');
+
+        let currentUserId = null;
+        let currentUsername = null;
+        let isGuestUser = false;
+        let currentRoomId = 'general'; // デフォルトの部屋ID
+
+        // =========================================================
+        // 認証とUIセットアップ
+        // =========================================================
+
+        async function checkAuthAndSetupUI() {
+            try {
+                const response = await fetch(`${SERVER_URL}/check-auth`, {
+                    method: 'GET',
+                    credentials: 'include'
+                });
+                const data = await response.json();
+
+                if (response.ok && data.isAuthenticated) {
+                    console.log("認証成功:", data);
+                    currentUserId = data.userId;
+                    currentUsername = data.username;
+                    isGuestUser = data.isGuest;
+                    
+                    currentUsernameDisplay.textContent = `${data.username} (${isGuestUser ? 'ゲスト' : '登録ユーザー'})`; // ヘッダーにユーザー名を表示
+                    authSection.style.display = 'none';
+                    chatSection.style.display = 'flex'; // chat-sectionをflex表示に
+
+                    // 認証後、Socket.IOを初期化/再接続
+                    initSocketIo();
+                    // デフォルトの部屋（または最後にいた部屋）に参加
+                    joinRoom(currentRoomId); // 部屋に参加する関数を呼び出す
+
+                } else {
+                    console.log("認証失敗またはセッションなし:", data.message);
+                    currentUserId = null;
+                    currentUsername = null;
+                    isGuestUser = false;
+                    authMessage.textContent = data.message || "認証が必要です。";
+                    authSection.style.display = 'block';
+                    chatSection.style.display = 'none';
+
+                    if (socket) {
+                        socket.disconnect();
+                    }
+                }
+            } catch (error) {
+                console.error("認証チェックエラー:", error);
+                authMessage.textContent = "認証チェック中にエラーが発生しました。サーバーに問題がある可能性があります。";
+                currentUserId = null;
+                currentUsername = null;
+                isGuestUser = false;
+                authSection.style.display = 'block';
+                chatSection.style.display = 'none';
+                if (socket) {
+                    socket.disconnect();
+                }
+            }
         }
 
-        function hideMessage(element) {
-            element.style.display = 'none';
+        // ページロード時に認証チェックを実行
+        document.addEventListener('DOMContentLoaded', checkAuthAndSetupUI);
+
+
+        // =========================================================
+        // Socket.IO 初期化とイベントハンドリング
+        // =========================================================
+
+        function initSocketIo() {
+            if (socket && socket.connected) {
+                console.log("Socket.IOは既に接続されています。再初期化しません。");
+                return;
+            }
+
+            console.log("Socket.IOを初期化します...");
+            socket = io(SERVER_URL, {
+                withCredentials: true,
+                transports: ['websocket', 'polling']
+            });
+
+            socket.on('connect', () => {
+                console.log('Socket.IOに接続しました！');
+                // 接続時に現在の部屋に自動で参加
+                socket.emit('joinRoom', currentRoomId);
+            });
+
+            socket.on('disconnect', () => {
+                console.log('Socket.IOから切断されました。');
+            });
+
+            socket.on('reauthenticate', () => {
+                console.log('サーバーから再認証要求がありました。ログインページにリダイレクトします。');
+                alert('セッションが切れました。再ログインしてください。');
+                checkAuthAndSetupUI();
+            });
+
+            // チャットメッセージを受信
+            socket.on('chat message', (msg) => {
+                const item = document.createElement('div');
+                item.classList.add('message');
+                // 自分のメッセージかどうかの判断
+                if (msg.senderId === currentUserId) { // msg.senderId はサーバーから送られる想定
+                    item.classList.add('mine');
+                } else {
+                    item.classList.add('other');
+                }
+
+                const timestamp = new Date(msg.timestamp).toLocaleTimeString();
+                item.innerHTML = `<span class="username">${msg.username}</span><br>${msg.content}<span class="timestamp">${timestamp}</span>`;
+                messagesDiv.appendChild(item);
+                messagesDiv.scrollTop = messagesDiv.scrollHeight;
+            });
+
+            // オンラインユーザーリストを受信
+            socket.on('online users', (users) => {
+                onlineUsersList.innerHTML = '';
+                if (users.length === 0) {
+                    const listItem = document.createElement('li');
+                    listItem.textContent = '現在オンラインユーザーはいません。';
+                    onlineUsersList.appendChild(listItem);
+                    return;
+                }
+                users.forEach(user => {
+                    const userElem = document.createElement('li');
+                    userElem.classList.add('online-user');
+                    userElem.textContent = user.username;
+                    onlineUsersList.appendChild(userElem);
+                });
+            });
+
+            // 部屋に参加したことの確認イベント (サーバーから)
+            socket.on('roomJoined', (roomName) => {
+                console.log(`部屋 "${roomName}" に参加しました。`);
+                currentRoomNameDisplay.textContent = roomName;
+                messagesDiv.innerHTML = ''; // 部屋切り替え時にメッセージをクリア
+                loadMessages(currentRoomId); // 新しい部屋のメッセージをロード
+            });
         }
 
-        showRegisterButton.addEventListener('click', () => {
-            loginContainer.style.display = 'none';
-            registerContainer.style.display = 'block';
-            hideMessage(loginMessageDiv);
-            hideMessage(registerMessageDiv);
+        // =========================================================
+        // ルーム機能
+        // =========================================================
+
+        async function joinRoom(roomId) {
+            if (!socket || !socket.connected) {
+                console.warn('Socket.IOが接続されていません。部屋に参加できません。');
+                return;
+            }
+            console.log(`部屋 ${roomId} に参加を試みます。`);
+            currentRoomId = roomId; // 現在の部屋IDを更新
+
+            // UIの部屋リストのアクティブ状態を更新
+            document.querySelectorAll('#room-list li').forEach(li => {
+                if (li.dataset.roomId === roomId) {
+                    li.classList.add('active');
+                } else {
+                    li.classList.remove('active');
+                }
+            });
+
+            // サーバーに部屋参加イベントを送信
+            socket.emit('joinRoom', roomId);
+        }
+
+        // 部屋リストのクリックイベント
+        roomListUl.addEventListener('click', (e) => {
+            if (e.target.tagName === 'LI' && e.target.dataset.roomId) {
+                joinRoom(e.target.dataset.roomId);
+            }
         });
 
-        showLoginButton.addEventListener('click', () => {
-            loginContainer.style.display = 'block';
-            registerContainer.style.display = 'none';
-            hideMessage(loginMessageDiv);
-            hideMessage(registerMessageDiv);
+        // =========================================================
+        // メッセージ履歴表示
+        // =========================================================
+
+        async function loadMessages(roomId) {
+            try {
+                // APIに部屋IDを渡すことを想定 (server.js の /messages エンドポイントも修正が必要)
+                const response = await fetch(`${SERVER_URL}/messages?roomId=${roomId || ''}`, { // roomIdが未指定の場合は空文字列
+                    method: 'GET',
+                    credentials: 'include'
+                });
+                const data = await response.json();
+
+                if (response.ok) {
+                    messagesDiv.innerHTML = ''; // 既存のメッセージをクリア
+                    data.forEach(msg => {
+                        const item = document.createElement('div');
+                        item.classList.add('message');
+                        // 自分のメッセージかどうかの判断
+                        if (msg.sender && msg.sender._id === currentUserId) {
+                            item.classList.add('mine');
+                        } else {
+                            item.classList.add('other');
+                        }
+
+                        const senderUsername = msg.sender && msg.sender.username ? msg.sender.username : '不明なユーザー';
+                        const timestamp = new Date(msg.timestamp).toLocaleTimeString();
+                        item.innerHTML = `<span class="username">${senderUsername}</span><br>${msg.content}<span class="timestamp">${timestamp}</span>`;
+                        messagesDiv.appendChild(item);
+                    });
+                    messagesDiv.scrollTop = messagesDiv.scrollHeight;
+                } else {
+                    console.error("過去メッセージのロード失敗:", data.message);
+                }
+            } catch (error) {
+                console.error("過去メッセージのロード中にエラー:", error);
+            }
+        }
+
+        // =========================================================
+        // フォームとボタンのイベントリスナー
+        // =========================================================
+
+        form.addEventListener('submit', (e) => {
+            e.preventDefault();
+            if (input.value && socket && socket.connected && currentRoomId) {
+                // メッセージ送信時に部屋IDも一緒に送信
+                socket.emit('chat message', { roomId: currentRoomId, content: input.value });
+                input.value = '';
+            } else if (!socket || !socket.connected) {
+                alert('チャットサーバーに接続されていません。再読み込みまたはログインをお試しください。');
+            } else if (!currentRoomId) {
+                alert('参加中の部屋が選択されていません。');
+            }
         });
 
+        // ファイル選択ボタンのクリックイベント
+        fileSelectButton.addEventListener('click', () => {
+            fileInput.click(); // 隠されたファイル入力要素をクリック
+        });
+
+        // ファイルが選択されたときの処理 (まだファイル送信ロジックはなし)
+        fileInput.addEventListener('change', () => {
+            if (fileInput.files.length > 0) {
+                console.log('選択されたファイル:', fileInput.files[0].name);
+                alert('ファイル選択機能はまだ実装されていません。');
+                // ここにファイルアップロードロジックを実装する
+                // 例: uploadFile(fileInput.files[0]);
+            }
+        });
+
+
+        // ログイン/登録/ゲスト参加/ログアウトボタンのロジックは変更なし
         loginButton.addEventListener('click', async () => {
-            const username = loginUsernameInput.value;
-            const password = loginPasswordInput.value;
-
+            const username = usernameInput.value;
+            const password = passwordInput.value;
             if (!username || !password) {
-                showMessage(loginMessageDiv, 'error', 'ユーザー名とパスワードを入力してください。');
+                authMessage.textContent = "ユーザー名とパスワードを入力してください。";
                 return;
             }
 
             try {
-                const response = await fetch('/login', {
+                const response = await fetch(`${SERVER_URL}/login`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ username, password })
+                    body: JSON.stringify({ username, password }),
+                    credentials: 'include'
                 });
                 const data = await response.json();
 
-                if (data.success) {
-                    showMessage(loginMessageDiv, 'success', data.message);
-                    // ログイン成功したらチャットページへリダイレクト
-                    window.location.href = '/chat.html';
+                if (response.ok) {
+                    authMessage.textContent = data.message;
+                    checkAuthAndSetupUI();
                 } else {
-                    showMessage(loginMessageDiv, 'error', data.message);
+                    authMessage.textContent = data.message || "ログイン失敗。";
                 }
             } catch (error) {
-                console.error('ログインエラー:', error);
-                showMessage(loginMessageDiv, 'error', 'サーバーとの通信に失敗しました。');
+                console.error("ログインエラー:", error);
+                authMessage.textContent = "ログイン中にエラーが発生しました。";
             }
         });
 
         registerButton.addEventListener('click', async () => {
-            const username = registerUsernameInput.value;
-            const password = registerPasswordInput.value;
-            const confirmPassword = confirmPasswordInput.value;
-
-            if (!username || !password || !confirmPassword) {
-                showMessage(registerMessageDiv, 'error', 'すべての項目を入力してください。');
-                return;
-            }
-            if (password !== confirmPassword) {
-                showMessage(registerMessageDiv, 'error', 'パスワードが一致しません。');
+            const username = usernameInput.value;
+            const password = passwordInput.value;
+            if (!username || !password) {
+                authMessage.textContent = "ユーザー名とパスワードを入力してください。";
                 return;
             }
 
             try {
-                const response = await fetch('/register', {
+                const response = await fetch(`${SERVER_URL}/register`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ username, password })
+                    body: JSON.stringify({ username, password }),
+                    credentials: 'include'
                 });
                 const data = await response.json();
 
-                if (data.success) {
-                    showMessage(registerMessageDiv, 'success', data.message + ' ログインしてください。');
-                    // 登録成功後、ログインフォームへ戻す
-                    setTimeout(() => {
-                        showLoginButton.click();
-                        loginUsernameInput.value = username;
-                        loginPasswordInput.value = '';
-                        hideMessage(registerMessageDiv);
-                    }, 2000);
-                } else {
-                    showMessage(registerMessageDiv, 'error', data.message);
+                authMessage.textContent = data.message;
+                if (response.ok) {
+                    usernameInput.value = '';
+                    passwordInput.value = '';
                 }
             } catch (error) {
-                console.error('登録エラー:', error);
-                showMessage(registerMessageDiv, 'error', 'サーバーとの通信に失敗しました。');
+                console.error("登録エラー:", error);
+                authMessage.textContent = "登録中にエラーが発生しました。";
             }
         });
 
-        guestLoginButton.addEventListener('click', async () => {
-            // ゲストログインとして /check-auth にリクエストを送る
+        guestButton.addEventListener('click', async () => {
+            checkAuthAndSetupUI();
+        });
+
+        logoutButton.addEventListener('click', async () => {
             try {
-                const response = await fetch('/check-auth?guest=true', { method: 'GET' });
+                const response = await fetch(`${SERVER_URL}/logout`, {
+                    method: 'POST',
+                    credentials: 'include'
+                });
                 const data = await response.json();
 
-                if (data.isGuest) {
-                    showMessage(loginMessageDiv, 'success', 'ゲストとしてチャットに参加します...');
-                    window.location.href = '/chat.html';
+                if (response.ok) {
+                    alert(data.message);
+                    // UIをリセットし、認証セクションを表示
+                    authSection.style.display = 'block';
+                    chatSection.style.display = 'none';
+                    messagesDiv.innerHTML = '';
+                    onlineUsersList.innerHTML = '';
+                    currentUserId = null;
+                    currentUsername = null;
+                    isGuestUser = false;
+                    usernameInput.value = '';
+                    passwordInput.value = '';
+                    authMessage.textContent = '';
+                    if (socket) {
+                        socket.disconnect();
+                    }
                 } else {
-                    showMessage(loginMessageDiv, 'error', 'ゲストログインに失敗しました。');
+                    alert(data.message || "ログアウトに失敗しました。");
                 }
             } catch (error) {
-                console.error('ゲストログインエラー:', error);
-                showMessage(loginMessageDiv, 'error', 'ゲストログインに失敗しました。');
+                console.error("ログアウトエラー:", error);
+                alert("ログアウト中にエラーが発生しました。");
             }
         });
 
