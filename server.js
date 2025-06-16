@@ -18,11 +18,12 @@ const SESSION_SECRET = process.env.SESSION_SECRET;
 // 環境変数が設定されているか確認 (開発時に役立つ)
 if (!MONGODB_URI) {
     console.error("エラー: MONGODB_URI 環境変数が設定されていません。MongoDBに接続できません。");
-    // 本番環境では process.exit(1); を追加して起動を停止させることも検討
+    process.exit(1); // 本番環境では起動を停止
 }
 if (!SESSION_SECRET) {
     console.warn("警告: SESSION_SECRET 環境変数が設定されていません。デフォルトのシークレットを使用します。");
     console.warn("本番環境ではセキュアなSESSION_SECRETを設定してください。");
+    // 本番環境では process.exit(1); を追加することも検討
 }
 
 // Expressアプリケーションの初期化
@@ -61,33 +62,34 @@ const User = mongoose.model('User', userSchema);
 const messageSchema = new mongoose.Schema({
     sender: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
     content: { type: String, required: true },
-    timestamp: { type: Date, default: Date.now }
+    timestamp: { type: Date, default: Date.now },
+    room: { type: String, default: 'general' } // ★追加: ルームIDフィールド
 });
 const Message = mongoose.model('Message', messageSchema);
 
 // セッション設定 (重要: Renderでは secure: true と sameSite: 'None' が推奨)
 const sessionMiddleware = session({
     secret: SESSION_SECRET || "super-secret-fallback-key-for-dev", // 環境変数が設定されていなければフォールバック
-    resave: false, // セッションストアに変更がない限りセッションを再保存しない
-    saveUninitialized: false, // 初期化されていないセッションを保存しない (例: ログイン前の空のセッション)
-    store: MongoStore.create({ // connect-mongo を使用してMongoDBをセッションストアに
-        mongoUrl: MONGODB_URI, // MongoDB接続URI
+    resave: false,
+    saveUninitialized: false,
+    store: MongoStore.create({
+        mongoUrl: MONGODB_URI,
         ttl: 1000 * 60 * 60 * 24 * 7, // セッションの有効期限 (7日間)
-        autoRemove: 'interval', // 期限切れセッションの自動削除を有効に
-        autoRemoveInterval: 10 // 10分ごとに期限切れセッションをクリーンアップ
+        autoRemove: 'interval',
+        autoRemoveInterval: 10
     }),
     cookie: {
         secure: true, // RenderはHTTPSなので必ずtrueに設定
         maxAge: 1000 * 60 * 60 * 24 * 7, // 7日間
-        httpOnly: true, // クライアントサイドJavaScriptからのアクセスを防ぐ
+        httpOnly: true,
         sameSite: 'None', // クロスサイトCookieを許可するために'None'に設定 (Render環境で必要)
     },
 });
 
 // Expressミドルウェア
-app.use(express.json()); // JSON形式のリクエストボディを解析
-app.use(express.urlencoded({ extended: true })); // URLエンコードされたリクエストボディを解析
-app.use(sessionMiddleware); // セッションミドルウェアを使用
+app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
+app.use(sessionMiddleware);
 
 // =========================================================
 // APIルートの定義 - 静的ファイルの提供よりも前に配置すること！
@@ -100,25 +102,25 @@ app.get("/check-auth", async (req, res) => {
     // 既存のユーザーセッションもゲストセッションもない場合
     if (!req.session.userId && !req.session.guestId) {
         // 新しいゲストセッションを生成
-        const guestId = `guest-${uuidv4()}`; // uuidライブラリのv4関数を使用
+        const guestId = `guest-${uuidv4()}`;
         const guestUsername = `ゲスト-${Math.floor(Math.random() * 9000) + 1000}`;
         
         try {
             const guestUser = new User({
                 username: guestUsername,
-                password: 'guest-password', // ゲストユーザーのパスワードはダミーでOK
+                password: 'guest-password',
                 isGuest: true,
-                isOnline: true // ログイン時にtrueにする
+                isOnline: false // ここはfalseのまま
             });
             await guestUser.save();
-            req.session.guestId = guestUser._id; // _id をセッションに保存
-            req.session.username = guestUsername; // ユーザー名をセッションに保存
+            req.session.guestId = guestUser._id;
+            req.session.username = guestUsername;
             console.log(`新規ゲストセッションを生成します。ユーザー名: ${guestUsername} (ID: ${guestUser._id})`);
             return res.status(200).json({
                 isAuthenticated: true,
                 isGuest: true,
                 username: guestUsername,
-                userId: guestUser._id, // ここで_idも返すべき
+                userId: guestUser._id,
                 message: "ゲストとして認証されました。"
             });
         } catch (error) {
@@ -130,12 +132,11 @@ app.get("/check-auth", async (req, res) => {
         try {
             const user = await User.findById(req.session.userId);
             if (user) {
-                user.isOnline = true; // ログイン時にtrueにする
-                await user.save();
+                // user.isOnline = true; // Socket.IO接続時に更新
+                // await user.save();
                 console.log(`認証チェック: 登録ユーザー ${user.username} (ID: ${user._id}) です。`);
                 return res.status(200).json({ isAuthenticated: true, isGuest: false, username: user.username, userId: user._id });
             } else {
-                // ユーザーが見つからない場合はセッションをクリアして再認証を促す
                 req.session.destroy(() => {
                     console.log("認証チェック: セッションのユーザーが見つかりません。");
                     res.status(401).json({ isAuthenticated: false, message: "ユーザーが見つかりません。再認証してください。" });
@@ -150,8 +151,8 @@ app.get("/check-auth", async (req, res) => {
         try {
             const guestUser = await User.findById(req.session.guestId);
             if (guestUser && guestUser.isGuest) {
-                guestUser.isOnline = true; // ログイン時にtrueにする
-                await guestUser.save();
+                // guestUser.isOnline = true; // Socket.IO接続時に更新
+                // await guestUser.save();
                 console.log(`認証チェック: ゲストユーザー ${guestUser.username} (ID: ${guestUser._id}) です。`);
                 return res.status(200).json({ isAuthenticated: true, isGuest: true, username: guestUser.username, userId: guestUser._id });
             } else {
@@ -165,7 +166,6 @@ app.get("/check-auth", async (req, res) => {
             res.status(500).json({ isAuthenticated: false, message: "サーバーエラーでゲスト認証チェックに失敗しました。" });
         }
     } else {
-        // ゲスト要求なしで認証されていない場合
         console.log("認証チェック: ユーザーは認証されていません (ゲスト要求なし)。");
         res.status(401).json({ isAuthenticated: false, message: "認証されていません。ログインしてください。" });
     }
@@ -176,13 +176,13 @@ app.post("/login", async (req, res) => {
     const { username, password } = req.body;
     try {
         const user = await User.findOne({ username });
-        if (!user || user.password !== password) { // 実際はパスワードのハッシュ化と比較が必要
+        if (!user || user.password !== password) {
             return res.status(401).json({ message: "ユーザー名またはパスワードが間違っています。" });
         }
         req.session.userId = user._id;
         req.session.username = user.username;
-        user.isOnline = true;
-        await user.save();
+        // user.isOnline = true; // Socket.IO接続時に更新
+        // await user.save();
         res.status(200).json({ message: "ログイン成功！", username: user.username, userId: user._id });
     } catch (error) {
         console.error("ログインエラー:", error);
@@ -198,7 +198,7 @@ app.post("/register", async (req, res) => {
         if (existingUser) {
             return res.status(409).json({ message: "そのユーザー名はすでに使用されています。" });
         }
-        const newUser = new User({ username, password, isOnline: false, isGuest: false }); // isOnline は登録時はfalse
+        const newUser = new User({ username, password, isOnline: false, isGuest: false });
         await newUser.save();
         res.status(201).json({ message: "登録成功！" });
     } catch (error) {
@@ -226,9 +226,26 @@ app.post("/logout", async (req, res) => {
             console.error("セッション破棄エラー:", err);
             return res.status(500).json({ message: "ログアウト中にエラーが発生しました。" });
         }
-        res.clearCookie('connect.sid'); // セッションCookieを削除 (セッション名が 'connect.sid' の場合)
+        res.clearCookie('connect.sid');
         res.status(200).json({ message: "ログアウト成功！" });
     });
+});
+
+// ★追加: 過去のメッセージ取得ルート
+app.get("/messages", async (req, res) => {
+    const { roomId } = req.query; // クエリパラメータからroomIdを取得
+    const query = roomId ? { room: roomId } : {}; // roomIdがあればroomでフィルタリング
+
+    try {
+        const messages = await Message.find(query) // フィルタリングを適用
+            .populate('sender', 'username') // sender IDからusernameを取得
+            .sort({ timestamp: 1 }) // 古いものから新しいものへソート
+            .limit(50); // 例: 最新50件のみ取得
+        res.status(200).json(messages);
+    } catch (error) {
+        console.error("過去メッセージ取得エラー:", error);
+        res.status(500).json({ message: "過去のメッセージの取得に失敗しました。" });
+    }
 });
 
 
@@ -236,14 +253,11 @@ app.post("/logout", async (req, res) => {
 // 静的ファイルの提供とSPAのためのフォールバックルート
 // APIルートの後に配置すること！
 // =========================================================
-// あなたのスクリーンショット によると、
-// フロントエンドのファイルは 'public' フォルダにあると想定されます。
 app.use(express.static(path.join(__dirname, 'public')));
 
 // SPA (Single Page Application) のためのフォールバックルート
 // 上記の静的ファイルやAPIルート以外のすべてのGETリクエストを、
 // 'public' フォルダ内の 'index.html' にルーティングします。
-// これにより、React Routerなどがクライアント側でルーティングを処理できます。
 app.get('*', (req, res) => {
     res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
@@ -275,39 +289,81 @@ io.on("connection", async (socket) => {
                 console.log(`Socket.IO接続: ${user.username} (ID: ${user._id}) がオンラインになりました。`);
                 socket.userId = user._id; // SocketにユーザーIDを紐付け
                 socket.username = user.username; // Socketにユーザー名を紐付け
+                socket.isGuest = user.isGuest; // Socketにゲストフラグを紐付け
+                
+                // ★追加: 接続時にデフォルトルームに参加させる (クライアント側でもjoinRoomを呼ぶ)
+                socket.currentRoom = 'general'; // デフォルトの部屋IDを設定
+                socket.join(socket.currentRoom);
+                console.log(`ユーザー ${socket.username} がデフォルト部屋 ${socket.currentRoom} に参加しました。`);
+                socket.emit('roomJoined', socket.currentRoom); // クライアントに通知
+
                 updateOnlineUsers(); // オンラインユーザーリストを更新してクライアントに送信
             } else {
                 console.warn("Socket.IO接続時にセッションのユーザーが見つかりません。セッションをクリアします。");
                 session.destroy((err) => {
                     if (err) console.error("Socket.IOセッション破棄エラー:", err);
-                    socket.disconnect(true); // セッションがないので切断
+                    socket.disconnect(true);
                 });
             }
         } catch (error) {
             console.error("Socket.IO接続時のDBエラー:", error);
-            socket.disconnect(true); // エラー発生時も切断
+            socket.disconnect(true);
         }
     } else {
         console.warn("Socket.IO接続時にセッション情報が不完全です。再認証を試みます。");
-        socket.emit("reauthenticate"); // クライアントに再認証を促すイベントを送信
-        socket.disconnect(true); // セッションがないので切断
+        socket.emit("reauthenticate");
+        socket.disconnect(true);
     }
 
+    // ★追加: 部屋参加イベントハンドラ
+    socket.on("joinRoom", async (roomId) => {
+        if (!socket.userId) {
+            console.warn("未認証ユーザーが部屋参加を試みました。");
+            socket.emit("reauthenticate");
+            return;
+        }
+
+        if (socket.currentRoom && socket.currentRoom !== roomId) {
+            socket.leave(socket.currentRoom);
+            console.log(`ユーザー ${socket.username} が部屋 ${socket.currentRoom} を離脱しました。`);
+        }
+        
+        socket.join(roomId);
+        socket.currentRoom = roomId;
+        console.log(`ユーザー ${socket.username} が部屋 ${roomId} に参加しました。`);
+        socket.emit('roomJoined', roomId); // クライアントに確認を返す
+    });
+
+
     socket.on("chat message", async (msg) => {
-        if (socket.userId) { // 認証済みユーザーのみメッセージ送信を許可
+        // msg は { roomId: string, content: string } の形式で来ると想定
+        if (socket.userId && msg.roomId && msg.content) {
             try {
+                // Socketが現在参加している部屋と、送られてきたメッセージの部屋IDが一致するか確認
+                if (socket.currentRoom !== msg.roomId) {
+                    console.warn(`不正な部屋IDでのメッセージ送信試行: ${socket.username} は部屋 ${socket.currentRoom} にいるが、部屋 ${msg.roomId} へ送信しようとしました。`);
+                    return; // 送信を拒否
+                }
+
                 const newMessage = new Message({
                     sender: socket.userId,
-                    content: msg,
+                    content: msg.content,
+                    room: msg.roomId, // ルームIDを保存
                 });
                 await newMessage.save();
-                // io.emitはすべての接続クライアントにイベントを送信
-                io.emit("chat message", { username: socket.username, content: msg, timestamp: newMessage.timestamp });
+
+                // 特定の部屋にのみメッセージを送信
+                io.to(msg.roomId).emit("chat message", { 
+                    username: socket.username, 
+                    content: msg.content, 
+                    timestamp: newMessage.timestamp,
+                    senderId: socket.userId // 自分のメッセージかどうかを判断するためにsenderIdも送信
+                });
             } catch (error) {
                 console.error("メッセージ保存エラー:", error);
             }
         } else {
-            console.warn("未認証ユーザーからのメッセージ試行:", msg);
+            console.warn("未認証ユーザーまたは無効なメッセージ形式からのメッセージ試行:", msg);
         }
     });
 
@@ -317,6 +373,9 @@ io.on("connection", async (socket) => {
             try {
                 const user = await User.findById(socket.userId);
                 if (user) {
+                    // 他のソケットがまだ接続している可能性があるので、isOnlineを直接falseにしない
+                    // ユーザーに紐づく全てのソケットが切断された場合のみisOnlineをfalseにするのが理想だが、
+                    // 現状はシンプルに切断時にfalseにする。
                     user.isOnline = false;
                     user.lastSeen = Date.now();
                     await user.save();
@@ -352,11 +411,9 @@ server.listen(PORT, () => {
 // エラーハンドリング (オプション)
 process.on('unhandledRejection', (reason, promise) => {
     console.error('Unhandled Rejection at:', promise, 'reason:', reason);
-    // アプリケーションをクラッシュさせるか、ロギングのみにするかは要件による
 });
 
 process.on('uncaughtException', (error) => {
     console.error('Uncaught Exception:', error);
-    // アプリケーションを適切にシャットダウンすることを検討
     process.exit(1);
 });
