@@ -1,4 +1,4 @@
-// server.js の完全なコード (ルーティング順序修正版)
+// server.js の最終版コード
 
 // 必要なモジュールのインポート
 const express = require("express");
@@ -18,7 +18,7 @@ const SESSION_SECRET = process.env.SESSION_SECRET;
 // 環境変数が設定されているか確認 (開発時に役立つ)
 if (!MONGODB_URI) {
     console.error("エラー: MONGODB_URI 環境変数が設定されていません。MongoDBに接続できません。");
-    // process.exit(1); // 本番環境ではexitすることが多いが、開発用にフォールバックを続ける
+    // 本番環境では process.exit(1); を追加して起動を停止させることも検討
 }
 if (!SESSION_SECRET) {
     console.warn("警告: SESSION_SECRET 環境変数が設定されていません。デフォルトのシークレットを使用します。");
@@ -29,12 +29,17 @@ if (!SESSION_SECRET) {
 const app = express();
 const server = http.createServer(app);
 
+// Renderのようなプロキシ/ロードバランサーの背後で動作する場合に必要
+// これにより、secure: true のCookieが正しく機能するようになります。
+app.set('trust proxy', 1);
+
 // Socket.IOの初期化
+// corsオプションは、クライアントが異なるオリジンから接続する場合に必要
 const io = socketIo(server, {
     cors: {
-        origin: "*", // 許可するオリジンを本番環境では具体的に指定することを推奨
+        origin: "*", // 許可するオリジンを本番環境では具体的に指定することを推奨 (例: "https://your-frontend-domain.com")
         methods: ["GET", "POST"],
-        credentials: true, // セッションCookieの送信を許可
+        credentials: true, // セッションCookieの送信を許可するためにtrueに設定
     },
 });
 
@@ -60,21 +65,21 @@ const messageSchema = new mongoose.Schema({
 });
 const Message = mongoose.model('Message', messageSchema);
 
-// セッション設定
+// セッション設定 (重要: Renderでは secure: true と sameSite: 'None' が推奨)
 const sessionMiddleware = session({
-    secret: SESSION_SECRET || "super-secret-fallback-key-for-dev",
-    resave: false,
-    saveUninitialized: false,
-    store: MongoStore.create({
-        mongoUrl: MONGODB_URI,
-        ttl: 1000 * 60 * 60 * 24 * 7,
-        autoRemove: 'interval',
-        autoRemoveInterval: 10
+    secret: SESSION_SECRET || "super-secret-fallback-key-for-dev", // 環境変数が設定されていなければフォールバック
+    resave: false, // セッションストアに変更がない限りセッションを再保存しない
+    saveUninitialized: false, // 初期化されていないセッションを保存しない (例: ログイン前の空のセッション)
+    store: MongoStore.create({ // connect-mongo を使用してMongoDBをセッションストアに
+        mongoUrl: MONGODB_URI, // MongoDB接続URI
+        ttl: 1000 * 60 * 60 * 24 * 7, // セッションの有効期限 (7日間)
+        autoRemove: 'interval', // 期限切れセッションの自動削除を有効に
+        autoRemoveInterval: 10 // 10分ごとに期限切れセッションをクリーンアップ
     }),
     cookie: {
         secure: true, // RenderはHTTPSなので必ずtrueに設定
-        maxAge: 1000 * 60 * 60 * 24 * 7,
-        httpOnly: true,
+        maxAge: 1000 * 60 * 60 * 24 * 7, // 7日間
+        httpOnly: true, // クライアントサイドJavaScriptからのアクセスを防ぐ
         sameSite: 'None', // クロスサイトCookieを許可するために'None'に設定 (Render環境で必要)
     },
 });
@@ -85,34 +90,35 @@ app.use(express.urlencoded({ extended: true })); // URLエンコードされた�
 app.use(sessionMiddleware); // セッションミドルウェアを使用
 
 // =========================================================
-// ここが重要な変更点：APIルートを静的ファイルの提供よりも前に配置
+// APIルートの定義 - 静的ファイルの提供よりも前に配置すること！
 // =========================================================
 
 // 認証チェックルート
 app.get("/check-auth", async (req, res) => {
     console.log("認証チェック:", req.session.userId ? `ユーザーID: ${req.session.userId}` : "ユーザー認証されていません");
 
-    // ゲストセッションが存在しないか、既存のユーザーセッションがない場合
+    // 既存のユーザーセッションもゲストセッションもない場合
     if (!req.session.userId && !req.session.guestId) {
-        const guestId = `guest-${uuidv4()}`;
+        // 新しいゲストセッションを生成
+        const guestId = `guest-${uuidv4()}`; // uuidライブラリのv4関数を使用
         const guestUsername = `ゲスト-${Math.floor(Math.random() * 9000) + 1000}`;
         
         try {
             const guestUser = new User({
                 username: guestUsername,
-                password: 'guest-password',
+                password: 'guest-password', // ゲストユーザーのパスワードはダミーでOK
                 isGuest: true,
-                isOnline: true
+                isOnline: true // ログイン時にtrueにする
             });
             await guestUser.save();
-            req.session.guestId = guestUser._id;
-            req.session.username = guestUsername;
+            req.session.guestId = guestUser._id; // _id をセッションに保存
+            req.session.username = guestUsername; // ユーザー名をセッションに保存
             console.log(`新規ゲストセッションを生成します。ユーザー名: ${guestUsername} (ID: ${guestUser._id})`);
             return res.status(200).json({
                 isAuthenticated: true,
                 isGuest: true,
                 username: guestUsername,
-                userId: guestUser._id,
+                userId: guestUser._id, // ここで_idも返すべき
                 message: "ゲストとして認証されました。"
             });
         } catch (error) {
@@ -120,14 +126,16 @@ app.get("/check-auth", async (req, res) => {
             return res.status(500).json({ isAuthenticated: false, message: "ゲストユーザー生成に失敗しました。" });
         }
     } else if (req.session.userId) {
+        // 既存の登録ユーザーセッション
         try {
             const user = await User.findById(req.session.userId);
             if (user) {
-                user.isOnline = true;
+                user.isOnline = true; // ログイン時にtrueにする
                 await user.save();
                 console.log(`認証チェック: 登録ユーザー ${user.username} (ID: ${user._id}) です。`);
                 return res.status(200).json({ isAuthenticated: true, isGuest: false, username: user.username, userId: user._id });
             } else {
+                // ユーザーが見つからない場合はセッションをクリアして再認証を促す
                 req.session.destroy(() => {
                     console.log("認証チェック: セッションのユーザーが見つかりません。");
                     res.status(401).json({ isAuthenticated: false, message: "ユーザーが見つかりません。再認証してください。" });
@@ -138,10 +146,11 @@ app.get("/check-auth", async (req, res) => {
             res.status(500).json({ isAuthenticated: false, message: "サーバーエラーで認証チェックに失敗しました。" });
         }
     } else if (req.session.guestId) {
+        // 既存のゲストセッション
         try {
             const guestUser = await User.findById(req.session.guestId);
             if (guestUser && guestUser.isGuest) {
-                guestUser.isOnline = true;
+                guestUser.isOnline = true; // ログイン時にtrueにする
                 await guestUser.save();
                 console.log(`認証チェック: ゲストユーザー ${guestUser.username} (ID: ${guestUser._id}) です。`);
                 return res.status(200).json({ isAuthenticated: true, isGuest: true, username: guestUser.username, userId: guestUser._id });
@@ -156,6 +165,7 @@ app.get("/check-auth", async (req, res) => {
             res.status(500).json({ isAuthenticated: false, message: "サーバーエラーでゲスト認証チェックに失敗しました。" });
         }
     } else {
+        // ゲスト要求なしで認証されていない場合
         console.log("認証チェック: ユーザーは認証されていません (ゲスト要求なし)。");
         res.status(401).json({ isAuthenticated: false, message: "認証されていません。ログインしてください。" });
     }
@@ -166,7 +176,7 @@ app.post("/login", async (req, res) => {
     const { username, password } = req.body;
     try {
         const user = await User.findOne({ username });
-        if (!user || user.password !== password) {
+        if (!user || user.password !== password) { // 実際はパスワードのハッシュ化と比較が必要
             return res.status(401).json({ message: "ユーザー名またはパスワードが間違っています。" });
         }
         req.session.userId = user._id;
@@ -188,7 +198,7 @@ app.post("/register", async (req, res) => {
         if (existingUser) {
             return res.status(409).json({ message: "そのユーザー名はすでに使用されています。" });
         }
-        const newUser = new User({ username, password, isOnline: false, isGuest: false });
+        const newUser = new User({ username, password, isOnline: false, isGuest: false }); // isOnline は登録時はfalse
         await newUser.save();
         res.status(201).json({ message: "登録成功！" });
     } catch (error) {
@@ -223,14 +233,17 @@ app.post("/logout", async (req, res) => {
 
 
 // =========================================================
-// ここから静的ファイルの提供とSPAのためのフォールバックルート
-// APIルートの後に配置することが重要！
+// 静的ファイルの提供とSPAのためのフォールバックルート
+// APIルートの後に配置すること！
 // =========================================================
-app.use(express.static(path.join(__dirname, 'public'))); // 'public' フォルダから静的ファイルを提供
+// あなたのスクリーンショット によると、
+// フロントエンドのファイルは 'public' フォルダにあると想定されます。
+app.use(express.static(path.join(__dirname, 'public')));
 
 // SPA (Single Page Application) のためのフォールバックルート
 // 上記の静的ファイルやAPIルート以外のすべてのGETリクエストを、
 // 'public' フォルダ内の 'index.html' にルーティングします。
+// これにより、React Routerなどがクライアント側でルーティングを処理できます。
 app.get('*', (req, res) => {
     res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
@@ -238,8 +251,8 @@ app.get('*', (req, res) => {
 
 
 // Socket.IO接続ハンドリング
+// ExpressセッションミドルウェアをSocket.IOでも共有
 io.use((socket, next) => {
-    // ExpressセッションミドルウェアをSocket.IOでも共有
     sessionMiddleware(socket.request, socket.request.res || {}, next);
 });
 
@@ -288,6 +301,7 @@ io.on("connection", async (socket) => {
                     content: msg,
                 });
                 await newMessage.save();
+                // io.emitはすべての接続クライアントにイベントを送信
                 io.emit("chat message", { username: socket.username, content: msg, timestamp: newMessage.timestamp });
             } catch (error) {
                 console.error("メッセージ保存エラー:", error);
@@ -338,9 +352,11 @@ server.listen(PORT, () => {
 // エラーハンドリング (オプション)
 process.on('unhandledRejection', (reason, promise) => {
     console.error('Unhandled Rejection at:', promise, 'reason:', reason);
+    // アプリケーションをクラッシュさせるか、ロギングのみにするかは要件による
 });
 
 process.on('uncaughtException', (error) => {
     console.error('Uncaught Exception:', error);
+    // アプリケーションを適切にシャットダウンすることを検討
     process.exit(1);
 });
